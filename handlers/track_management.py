@@ -14,8 +14,8 @@ router = Router()
 
 def register_track_management_handlers(router_object):
     router_object.message.register(process_track_number, Track.track_number)
-    router_object.message.register(process_track_unnamed, F.data == "track_no")
-    router_object.message.register(process_track_named, F.data == "track_yes")
+    # router_object.message.register(process_track_unnamed, F.data == "track_no")
+    # router_object.message.register(process_track_named, F.data == "track_yes")
     router_object.message.register(process_track_name_input, Track.track_name)
 
 
@@ -148,33 +148,35 @@ async def process_track_number(message: Message, state: FSMContext):
                 "Не удалось найти данные для создания сделки. Пожалуйста, попробуйте снова."
             )
 
-    # Запрашиваем у пользователя, хочет ли он добавить название для трек-номера
-    await message.answer("Хотите ли Вы дать название данному трек-номеру "
-                         "для облегчения отслеживания посылки?",
-                         reply_markup=create_yes_no_keyboard(yes_cb='track_yes', no_cb='track_no'))
-
-
-@router.callback_query(F.data == "track_no")
-async def process_track_unnamed(callback: CallbackQuery, state: FSMContext):
-    user_data = await state.get_data()
-    track_number = user_data.get('track_number')
-    track_name = track_number
-    chat_id = callback.message.chat.id
-    logging.info(f"Название для трек-номера не введено, сохранен под названием: {track_name}")
-    # Сохраняем трек-номер и его название в базу данных
-    save_track_number(track_number, track_name, chat_id)
-    await callback.message.answer(f'Трек-номер сохранен с исходным названием {track_name}.\n'
-                                  f'Вы можете изменить название в любое удобное время в разделе меню '
-                                  f'"Отслеживание посылок"', reply_markup=create_menu_button())
-    # Очищаем состояние
-    await state.clear()
-
-
-@router.callback_query(F.data == "track_yes")
-async def process_track_named(callback: CallbackQuery, state: FSMContext):
-    # Переходим в состояние ожидания ввода названия
-    await callback.message.answer("Введите название для трек-номера:")
+    # Запрашиваем у пользователя название для трек-номера
+    await message.answer("Введите название для трек-номера (для облегчения отслеживания посылки):")
     await state.set_state(Track.track_name)  # Устанавливаем состояние для ожидания текста
+
+
+# @router.callback_query(F.data == "track_no")
+# async def process_track_unnamed(callback: CallbackQuery, state: FSMContext):
+#     user_data = await state.get_data()
+#     track_number = user_data.get('track_number')
+#     track_name = track_number
+#     chat_id = callback.message.chat.id
+#     logging.info(f"Название для трек-номера не введено, сохранен под названием: {track_name}")
+#     # Сохраняем трек-номер и его название в базу данных
+#     save_track_number(track_number, track_name, chat_id)
+#     await callback.message.answer(f'Трек-номер сохранен с исходным названием {track_name}.\n'
+#                                   f'Вы можете изменить название в любое удобное время в разделе меню '
+#                                   f'"Отслеживание посылок"', reply_markup=create_menu_button())
+#     # Очищаем состояние
+#     await state.clear()
+#
+#
+# @router.callback_query(F.data == "track_yes")
+# async def process_track_named(callback: CallbackQuery, state: FSMContext):
+#     # Переходим в состояние ожидания ввода названия
+#     await callback.message.answer("Введите название для трек-номера:")
+#     await state.set_state(Track.track_name)  # Устанавливаем состояние для ожидания текста
+
+
+# Хэндлер для получения названия трек-номера
 
 
 # Хэндлер для получения названия трек-номера
@@ -185,9 +187,11 @@ async def process_track_name_input(message: Message, state: FSMContext):
     track_name = message.text.strip()  # Получаем введенное пользователем название
     chat_id = message.chat.id
     logging.info(f"Получено название для трек-номера: {track_name}")
+
     # Сохраняем трек-номер и его название в базу данных
     save_track_number(track_number, track_name, chat_id)
     await message.answer(f"📄 Трек-номер {track_number} с названием '{track_name}' успешно добавлен!",
                          reply_markup=create_menu_button())
+
     # Очищаем состояние
     await state.clear()

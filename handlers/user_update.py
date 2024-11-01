@@ -90,7 +90,7 @@ async def process_update_pickup(callback: CallbackQuery, state: FSMContext):
     # Вызов функции обновления контакта
     contact_id = str(old_client_data["contact_id"])
     logging.info(f"Contact ID is {contact_id}")
-    update_contact(contact_id, name_translit, phone, city)
+    update_contact(contact_id, name_translit, personal_code, phone, city)
     await state.update_data(contact_id=contact_id)
     update_client_data(
         chat_id=chat_id,

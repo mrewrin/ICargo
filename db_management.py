@@ -336,3 +336,31 @@ def get_chat_id_by_contact_id(contact_id):
     if result:
         return result[0]  # Возвращаем chat_id
     return None
+
+
+async def delete_deal_by_track_number(track_number):
+    """
+    Удаляет сделку из базы данных по трек-номеру.
+    """
+    if not track_number:
+        logging.info("Трек номер пуст. Удаление сделки не требуется.")
+        return
+
+    logging.info(f"Трек номер для удаления: {track_number}")
+
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Проверим, хранится ли трек-номер в базе перед удалением
+    cursor.execute('SELECT track_number FROM track_numbers WHERE track_number = ?', (track_number,))
+    stored_track_number = cursor.fetchone()
+
+    if stored_track_number:
+        # Удаляем запись
+        cursor.execute('DELETE FROM track_numbers WHERE track_number = ?', (track_number,))
+        conn.commit()
+        logging.info(f"Удалена сделка с трек номером: {track_number}")
+    else:
+        logging.info(f"Сделка с трек номером {track_number} не найдена в базе данных.")
+
+    conn.close()

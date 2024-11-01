@@ -47,7 +47,7 @@ async def process_phone_search(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(lambda callback: callback.data.startswith("backtrack_"))
 async def handle_track_status(callback: CallbackQuery, state: FSMContext):
-    await callback.message.delete()  # Удаляем старое сообщение
+    # await callback.message.delete()  # Удаляем старое сообщение
     track_number = callback.data.split("_")[1]  # Получаем трек-номер
     logging.info(f"Получен трек-номер: {track_number}")
 
