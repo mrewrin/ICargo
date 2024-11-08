@@ -3,6 +3,7 @@ import random
 import logging
 
 
+# Инициализация и настройка базы данных
 def init_db():
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -59,6 +60,7 @@ def init_db():
     conn.close()
 
 
+# Генерация и проверка уникальных кодов
 def generate_unique_code():
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -83,6 +85,34 @@ def generate_unique_code():
     return personal_code
 
 
+def is_vip_code_available(code):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT vip_code FROM vip_codes WHERE vip_code = ?", (code,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+
+def update_personal_code(old_code, new_code):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE clients SET personal_code = ? WHERE personal_code = ?", (new_code, old_code))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def remove_vip_code(code):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM vip_codes WHERE vip_code = ?", (code,))
+    conn.commit()
+    conn.close()
+
+
+# Операции с данными клиентов
 def save_client_data(chat_id, contact_id, personal_code, name_cyrillic, name_translit, phone, city, pickup_point):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -154,6 +184,26 @@ def get_client_by_chat_id(chat_id):
         return None  # Если пользователь не найден, возвращаем None
 
 
+def get_client_by_contact_id(contact_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM clients WHERE contact_id = ?", (contact_id,))
+    result = cursor.fetchone()
+    if result:
+        return {
+            "chat_id": result[0],
+            "contact_id": result[1],
+            "personal_code": result[2],
+            "name_cyrillic": result[3],
+            "name_translit": result[4],
+            "phone": result[5],
+            "city": result[6],
+            "pickup_point": result[7]
+        }
+    return None
+
+
 def check_chat_id_exists(chat_id):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -184,6 +234,51 @@ def get_all_chat_ids():
     return chat_ids
 
 
+def get_personal_code_by_chat_id(chat_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT personal_code FROM clients WHERE chat_id = ?', (chat_id,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        return result[0]  # Возвращаем personal_code
+    else:
+        return None  # Если personal_code не найден
+
+
+def get_contact_id_by_code(code):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    logging.info(f"Проверка кода в базе данных: {code} (тип: {type(code)})")
+    cursor.execute('SELECT contact_id FROM clients WHERE personal_code = ?', (code,))
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return result[0]
+    return None
+
+
+def get_chat_id_by_contact_id(contact_id):
+    """
+    Получает chat_id из базы данных по contact_id.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Выполняем запрос для получения chat_id по contact_id
+    cursor.execute('SELECT chat_id FROM clients WHERE contact_id = ?', (contact_id,))
+    result = cursor.fetchone()
+
+    conn.close()
+
+    if result:
+        return result[0]  # Возвращаем chat_id
+    return None
+
+
+# Работа с трек-номерами
 def save_track_number(track_number, name_track, chat_id):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -249,20 +344,6 @@ def get_track_numbers_by_chat_id(chat_id):
     return rows
 
 
-def get_personal_code_by_chat_id(chat_id):
-    conn = sqlite3.connect('clients.db')
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT personal_code FROM clients WHERE chat_id = ?', (chat_id,))
-    result = cursor.fetchone()
-    conn.close()
-
-    if result:
-        return result[0]  # Возвращаем personal_code
-    else:
-        return None  # Если personal_code не найден
-
-
 def get_all_track_numbers():
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -280,64 +361,7 @@ def get_all_track_numbers():
     conn.close()
 
 
-# Функции для проверки и присвоения vip номеров
-def is_vip_code_available(code):
-    conn = sqlite3.connect('clients.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT vip_code FROM vip_codes WHERE vip_code = ?", (code,))
-    result = cursor.fetchone()
-    conn.close()
-    return result is not None
-
-
-def update_personal_code(old_code, new_code):
-    conn = sqlite3.connect('clients.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE clients SET personal_code = ? WHERE personal_code = ?", (new_code, old_code))
-    updated = cursor.rowcount > 0
-    conn.commit()
-    conn.close()
-    return updated
-
-
-def remove_vip_code(code):
-    conn = sqlite3.connect('clients.db')
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM vip_codes WHERE vip_code = ?", (code,))
-    conn.commit()
-    conn.close()
-
-
-def get_contact_id_by_code(code):
-    conn = sqlite3.connect('clients.db')
-    cursor = conn.cursor()
-    logging.info(f"Проверка кода в базе данных: {code} (тип: {type(code)})")
-    cursor.execute('SELECT contact_id FROM clients WHERE personal_code = ?', (code,))
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        return result[0]
-    return None
-
-
-def get_chat_id_by_contact_id(contact_id):
-    """
-    Получает chat_id из базы данных по contact_id.
-    """
-    conn = sqlite3.connect('clients.db')
-    cursor = conn.cursor()
-
-    # Выполняем запрос для получения chat_id по contact_id
-    cursor.execute('SELECT chat_id FROM clients WHERE contact_id = ?', (contact_id,))
-    result = cursor.fetchone()
-
-    conn.close()
-
-    if result:
-        return result[0]  # Возвращаем chat_id
-    return None
-
-
+# Асинхронные операции
 async def delete_deal_by_track_number(track_number):
     """
     Удаляет сделку из базы данных по трек-номеру.

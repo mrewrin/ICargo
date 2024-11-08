@@ -6,6 +6,36 @@ from config import webhook_url
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
+# Определение маппинга стадий для каждой воронки
+stage_mapping = {
+    'ПВ Астана №1': {
+        'arrived': 'NEW',
+        'awaiting_pickup': 'UC_MJZYDP',
+        'archive': 'LOSE',
+        'issued': 'WON'
+    },
+    'ПВ Астана №2': {
+        'arrived': 'C2:NEW',
+        'awaiting_pickup': 'C2:UC_8EQX6X',
+        'archive': 'C2:LOSE',
+        'issued': 'C2:WON'
+    },
+    'ПВ Караганда №1': {
+        'arrived': 'C4:NEW',
+        'awaiting_pickup': 'C4:UC_VOLZYJ',
+        'archive': 'C4:LOSE',
+        'issued': 'C4:WON'
+    },
+    'ПВ Караганда №2': {
+        'arrived': 'C6:NEW',
+        'awaiting_pickup': 'C6:UC_VEHS4L',
+        'archive': 'C6:LOSE',
+        'issued': 'C6:WON'
+    }
+}
+
+
+# Получение информации о сделках и контактах
 def get_deals_by_track(track_number):
     """
     Получает список сделок по значению пользовательского поля UF_CRM_1723542556619.
@@ -143,6 +173,116 @@ def get_latest_deal_info(contact_id):
     return None
 
 
+def get_active_deals_by_contact(contact_id):
+    """
+    Возвращает список активных сделок для контакта, находящихся на этапах 'Прибыл в Пункт выдачи'.
+    """
+    url = f"{webhook_url}/crm.deal.list"
+    # Этапы "Прибыл в Пункт выдачи"
+    stages = ["C4:NEW", "C6:NEW", "NEW", "C2:NEW"]
+    params = {
+        'filter': {
+            'CONTACT_ID': contact_id,
+            'STAGE_ID': stages,  # Фильтруем по этапам прибытия в пункт выдачи
+        },
+        'select': ['ID', 'TITLE', 'STAGE_ID', 'UF_CRM_1723542556619']  # Добавляем поле трек-номера
+    }
+
+    response = requests.post(url, json=params)
+    if response.status_code == 200:
+        deals = response.json().get('result')
+        if deals:
+            logging.info(f"Найдено {len(deals)} сделок на этапах 'Прибыл в Пункт выдачи' для контакта {contact_id}.")
+            return deals
+        else:
+            logging.info(f"Сделки на этапах 'Прибыл в Пункт выдачи' для контакта {contact_id} не найдены.")
+            return None
+    else:
+        logging.error(f"Ошибка при получении сделок для контакта {contact_id}: {response.text}")
+        return None
+
+
+def find_deal_by_track_number(track_number):
+    url = webhook_url + 'crm.deal.list'
+
+    params = {
+        'filter': {'UF_CRM_1723542556619': track_number},
+        'select': ['ID', 'TITLE', 'CONTACT_ID']
+    }
+
+    response = requests.post(url, json=params)
+
+    if response.status_code == 200:
+        deals = response.json().get('result', [])
+        if deals:
+            logging.info(f"Найдены сделки с трек-номером {track_number}: {deals}")
+            return deals[0]  # Возвращаем первую найденную сделку
+    else:
+        logging.error(f"Ошибка при поиске сделки по трек-номеру {track_number}: {response.status_code}")
+        return None
+
+
+def get_final_deal_for_today(contact_id, pipeline_name):
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    issued_stage_id = stage_mapping.get(pipeline_name, {}).get('issued',
+                                                               'WON')  # Получаем идентификатор этапа "Выдан" для указанной воронки
+
+    url = f"{webhook_url}/crm.deal.list"
+    params = {
+        'filter': {
+            'CONTACT_ID': contact_id,
+            'STAGE_ID': issued_stage_id,  # Используем корректный этап "Выдан" для данной воронки
+            '>DATE_CREATE': today_date + 'T00:00:00',  # Сравнение по сегодняшней дате
+            '<DATE_CREATE': today_date + 'T23:59:59'
+        },
+        'select': ['ID', 'UF_CRM_1727870320443', 'UF_CRM_1729104281', 'UF_CRM_1729115312']  # Поля итоговой сделки
+    }
+    response = requests.post(url, json=params)
+    if response.status_code == 200:
+        deals = response.json().get('result')
+        if deals:
+            return deals[0]  # Возвращаем первую итоговую сделку на сегодня
+        else:
+            return None
+    else:
+        logging.error(f"Ошибка при получении итоговой сделки для контакта {contact_id}: {response.text}")
+        return None
+
+
+async def find_final_deal_for_contact(contact_id, exclude_deal_id=None):
+    """
+    Ищет итоговую сделку для данного контакта по полю "Итоговая сделка",
+    с учетом только стадий "awaiting_pickup".
+    """
+    # Получаем список стадий 'awaiting_pickup' из stage_mapping
+    awaiting_pickup_stages = [details['awaiting_pickup'] for details in stage_mapping.values()]
+
+    url = f"{webhook_url}/crm.deal.list"
+    params = {
+        'filter': {
+            'CONTACT_ID': contact_id,
+            'UF_CRM_1729539412': '1',  # Поле для поиска итоговой сделки
+            'STAGE_ID': awaiting_pickup_stages  # Фильтр по стадиям 'awaiting_pickup'
+        },
+        'select': ['*']  # Запрашиваем все поля сделки
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=params)
+        if response.status_code == 200:
+            deals = response.json().get('result')
+            for deal in deals:
+                if deal['ID'] != exclude_deal_id:
+                    logging.info(f"Найдена итоговая сделка для контакта {contact_id} с ID: {deal['ID']}")
+                    return deal  # Возвращаем итоговую сделку
+            logging.info(f"Итоговая сделка для контакта {contact_id} не найдена.")
+            return None
+        else:
+            logging.error(f"Ошибка при поиске итоговой сделки для контакта {contact_id}: {response.text}")
+            return None
+
+
+# Создание и обновление контактов
 def create_contact(name, personal_code, phone, city):
     """
     Создает контакт с указанными именем, телефоном и городом.
@@ -226,19 +366,17 @@ def update_contact(contact_id, name=None, personal_code=None, phone=None, city=N
         print(f"Ответ сервера: {response.text}")
 
 
-def update_contact_fields_in_bitrix(contact_id, sum_weight, sum_amount):
+async def update_contact_fields_in_bitrix(contact_id, sum_weight, sum_amount, order_count):
     """
-    Обновляет пользовательские поля контакта в Bitrix.
-    Обнуляет поля weight и amount, и обновляет total_weight и total_amount новыми значениями.
+    Асинхронно обновляет пользовательские поля контакта в Bitrix, устанавливая вес, сумму и количество заказов.
     """
-    url = webhook_url + 'crm.contact.update'
+    url = webhook_url + '/crm.contact.update'
 
     # Поля для обновления
     fields = {
-        # 'UF_CRM_1726207792191': '0',  # weight
-        # 'UF_CRM_1726207809637': '0',  # amount
-        'UF_CRM_1726837773968': str(sum_weight),  # total_weight
-        'UF_CRM_1726837761251': str(sum_amount)  # total_amount
+        'UF_CRM_1726207792191': str(sum_weight),  # Вес заказов (weight)
+        'UF_CRM_1726207809637': str(sum_amount),  # Сумма заказов (amount)
+        'UF_CRM_1730182877': str(order_count)     # Количество заказов (number_of_orders)
     }
 
     # Параметры запроса
@@ -248,8 +386,10 @@ def update_contact_fields_in_bitrix(contact_id, sum_weight, sum_amount):
     }
 
     # Отправляем запрос на обновление данных контакта
-    response = requests.post(url, json=params_contact)
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=params_contact)
 
+    # Обработка ответа
     if response.status_code == 200:
         result = response.json().get('result')
         if result:
@@ -261,6 +401,33 @@ def update_contact_fields_in_bitrix(contact_id, sum_weight, sum_amount):
         logging.error(f"Ответ сервера: {response.text}")
 
 
+def update_contact_code_in_bitrix(contact_id, new_code):
+    url = webhook_url + 'crm.contact.update'
+    fields = {
+        'UF_CRM_1726123664764': new_code
+    }
+    params_contact = {
+        'id': contact_id,
+        'fields': fields
+    }
+
+    logging.info(f"Обновление контакта в Битрикс. ID: {contact_id}, Новый код: {new_code}")
+
+    # Отправляем запрос на обновление данных
+    response = requests.post(url, json=params_contact)
+
+    if response.status_code == 200:
+        result = response.json().get('result')
+        if result:
+            logging.info(f"Контакт с ID {contact_id} успешно обновлен в Битрикс.")
+        else:
+            logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.json().get('error_description')}")
+    else:
+        logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.status_code}")
+        logging.error(f"Ответ сервера: {response.text}")
+
+
+# Создание и обновление сделок
 def create_deal(contact_id, personal_code, track_number, pickup_point, phone, chat_id):
     """
     Создает сделку, связывая её с указанным контактом и добавляет выбранный пункт выдачи.
@@ -345,68 +512,20 @@ def update_deal_contact(deal_id, contact_id, personal_code, phone, city, pickup_
         return False
 
 
-def find_deal_by_track_number(track_number):
-    url = webhook_url + 'crm.deal.list'
-
-    params = {
-        'filter': {'UF_CRM_1723542556619': track_number},
-        'select': ['ID', 'TITLE', 'CONTACT_ID']
+def update_deal_stage(deal_id, stage_id):
+    url = f"{webhook_url}/crm.deal.update"
+    data = {
+        'id': deal_id,
+        'fields': {
+            'STAGE_ID': stage_id
+        }
     }
-
-    response = requests.post(url, json=params)
-
+    response = requests.post(url, json=data)
     if response.status_code == 200:
-        deals = response.json().get('result', [])
-        if deals:
-            logging.info(f"Найдены сделки с трек-номером {track_number}: {deals}")
-            return deals[0]  # Возвращаем первую найденную сделку
+        logging.info(f"Сделка с ID {deal_id} обновлена на этап {stage_id}.")
+        return True
     else:
-        logging.error(f"Ошибка при поиске сделки по трек-номеру {track_number}: {response.status_code}")
-        return None
-
-
-def detach_contact_from_deal(deal_id, contact_id):
-    """
-    Отвязывает контакт от сделки в Битрикс.
-    """
-    url = webhook_url + 'crm.deal.contact.items.delete'
-
-    params = {
-        'ID': deal_id,
-        'CONTACT_ID': contact_id
-    }
-
-    response = requests.post(url, json=params)
-
-    if response.status_code == 200:
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Контакт с ID {contact_id} успешно отвязан от сделки с ID {deal_id}.")
-            return True
-        else:
-            logging.error(f"Не удалось отвязать контакт с ID {contact_id} от сделки с ID {deal_id}. Ответ сервера: {response.text}")
-            return False
-    else:
-        logging.error(f"Ошибка при отвязывании контакта с ID {contact_id} от сделки с ID {deal_id}: {response.status_code}. Ответ сервера: {response.text}")
-        return False
-
-
-def delete_deal(deal_id):
-    url = webhook_url + 'crm.deal.delete'
-
-    params = {
-        'id': deal_id  # Важно передавать правильный параметр 'id' для удаления
-    }
-
-    response = requests.post(url, json=params)
-
-    if response.status_code == 200:
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Сделка с ID {deal_id} успешно удалена.")
-            return True
-    else:
-        logging.error(f"Ошибка при удалении сделки с ID {deal_id}: {response.status_code}")
+        logging.error(f"Ошибка при обновлении этапа сделки {deal_id}: {response.text}")
         return False
 
 
@@ -490,185 +609,60 @@ def update_custom_deal_fields(deal_id, telegram_id=None, track_number=None, pick
         return False
 
 
-def update_contact_code_in_bitrix(contact_id, new_code):
-    url = webhook_url + 'crm.contact.update'
-    fields = {
-        'UF_CRM_1726123664764': new_code
-    }
-    params_contact = {
-        'id': contact_id,
-        'fields': fields
-    }
-
-    logging.info(f"Обновление контакта в Битрикс. ID: {contact_id}, Новый код: {new_code}")
-
-    # Отправляем запрос на обновление данных
-    response = requests.post(url, json=params_contact)
-
-    if response.status_code == 200:
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Контакт с ID {contact_id} успешно обновлен в Битрикс.")
-        else:
-            logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.json().get('error_description')}")
-    else:
-        logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.status_code}")
-        logging.error(f"Ответ сервера: {response.text}")
-
-
-# Определение маппинга стадий для каждой воронки
-stage_mapping = {
-    'ПВ Астана №1': {
-        'arrived': 'NEW',
-        'awaiting_pickup': 'UC_MJZYDP',
-        'archive': 'LOSE',
-        'issued': 'WON'
-    },
-    'ПВ Астана №2': {
-        'arrived': 'C2:NEW',
-        'awaiting_pickup': 'C2:UC_8EQX6X',
-        'archive': 'C2:LOSE',
-        'issued': 'C2:WON'
-    },
-    'ПВ Караганда №1': {
-        'arrived': 'C4:NEW',
-        'awaiting_pickup': 'C4:UC_VOLZYJ',
-        'archive': 'C4:LOSE',
-        'issued': 'C4:WON'
-    },
-    'ПВ Караганда №2': {
-        'arrived': 'C6:NEW',
-        'awaiting_pickup': 'C6:UC_VEHS4L',
-        'archive': 'C6:LOSE',
-        'issued': 'C6:WON'
-    }
-}
-
-
-def get_active_deals_by_contact(contact_id):
+async def create_final_deal(contact_id, weight, amount, number_of_orders, track_number, personal_code, pickup_point, phone, pipeline_stage, category_id):
     """
-    Возвращает список активных сделок для контакта, находящихся на этапах 'Прибыл в Пункт выдачи'.
+    Создает итоговую сделку для данного контакта и обновляет поля контакта с информацией о весе, сумме и количестве заказов.
     """
-    url = f"{webhook_url}/crm.deal.list"
-    # Этапы "Прибыл в Пункт выдачи"
-    stages = ["C4:NEW", "C6:NEW", "NEW", "C2:NEW"]
-    params = {
-        'filter': {
-            'CONTACT_ID': contact_id,
-            'STAGE_ID': stages,  # Фильтруем по этапам прибытия в пункт выдачи
-        },
-        'select': ['ID', 'TITLE', 'STAGE_ID', 'UF_CRM_1723542556619']  # Добавляем поле трек-номера
+    logging.info(f"Определяем этап для pipeline_stage: воронка {category_id}, этап {pipeline_stage}")
+    # Получаем начальный этап для итоговой сделки в зависимости от переданной воронки
+    stage_id = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup', 'WON')
+    logging.info(f"Этап для итоговой сделки: {stage_id}")
+
+    pickup_mapping = {
+        "pv_karaganda_1": "52",
+        "pv_karaganda_2": "54",
+        "pv_astana_1": "48",
+        "pv_astana_2": "50"
     }
+    pickup = pickup_mapping.get(pickup_point)
 
-    response = requests.post(url, json=params)
-    if response.status_code == 200:
-        deals = response.json().get('result')
-        if deals:
-            logging.info(f"Найдено {len(deals)} сделок на этапах 'Прибыл в Пункт выдачи' для контакта {contact_id}.")
-            return deals
-        else:
-            logging.info(f"Сделки на этапах 'Прибыл в Пункт выдачи' для контакта {contact_id} не найдены.")
-            return None
-    else:
-        logging.error(f"Ошибка при получении сделок для контакта {contact_id}: {response.text}")
-        return None
+    # Проверка значений и установка значений по умолчанию, если они пусты
+    weight = float(weight) if weight else 0.0
+    amount = float(amount) if amount else 0.0
+    number_of_orders = int(number_of_orders) if number_of_orders else 0
 
-
-def update_deal_stage(deal_id, stage_id):
-    url = f"{webhook_url}/crm.deal.update"
+    url = f"{webhook_url}/crm.deal.add"
     data = {
-        'id': deal_id,
         'fields': {
-            'STAGE_ID': stage_id
+            'TITLE': f'Итоговая сделка: {personal_code} {pickup_point} {phone}',
+            'CONTACT_ID': contact_id,
+            'STAGE_ID': stage_id,  # Установка корректного этапа
+            'CATEGORY_ID': category_id,
+            'UF_CRM_1723542922949': f'{pickup}',
+            'UF_CRM_1727870320443': weight,  # Поле Вес заказов
+            'OPPORTUNITY': amount,  # Поле Сумма заказов
+            'UF_CRM_1730185262': number_of_orders,  # Поле Количество заказов
+            'UF_CRM_1729115312': track_number,  # Поле для трек-номеров
+            'UF_CRM_1729539412': '1',  # Устанавливаем флаг итоговой сделки
+            'OPENED': 'Y',  # Сделка открыта
         }
     }
-    response = requests.post(url, json=data)
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=data)
+
     if response.status_code == 200:
-        logging.info(f"Сделка с ID {deal_id} обновлена на этап {stage_id}.")
-        return True
+        deal_id = response.json().get('result')
+        logging.info(f"Создана итоговая сделка для контакта {contact_id} с ID {deal_id}.")
+
+        # Обновление полей контакта
+        await update_contact_fields_in_bitrix(contact_id, sum_weight=weight, sum_amount=amount, order_count=number_of_orders)
+        return deal_id
     else:
-        logging.error(f"Ошибка при обновлении этапа сделки {deal_id}: {response.text}")
-        return False
-
-
-# def archive_deals_by_contact(contact_id, pipeline_name):
-#     # Получаем список сделок в стадии "Прибыл в пункт выдачи"
-#     deals = get_active_deals_by_contact(contact_id)
-#     track_numbers = []  # Список для трек-номеров
-#
-#     if deals:
-#         for deal in deals:
-#             deal_id = deal['ID']
-#             track_number = deal.get('UF_CRM_1723542556619')  # Получаем трек-номер
-#             if track_number:
-#                 track_numbers.append(track_number)
-#             else:
-#                 logging.info(f"Трек-номер не найден для сделки с ID {deal_id}")
-#
-#             # Используем `stage_mapping` для определения стадии "Архив"
-#             archive_stage_id = stage_mapping.get(pipeline_name, {}).get('archive', 'LOSE')
-#             update_deal_stage(deal_id, archive_stage_id)
-#             logging.info(f"Сделка с ID {deal_id} перемещена в архив.")
-#     else:
-#         logging.info(f"Нет активных сделок для контакта с ID {contact_id}.")
-#
-#     track_numbers_str = ', '.join(track_numbers)  # Преобразуем список трек-номеров в строку
-#     logging.info(f"Трек-номера для контакта {contact_id}: {track_numbers_str}")
-#     return track_numbers_str  # Возвращаем строку с трек-номерами
-
-
-# def create_new_deal(contact_id, weight, amount, track_numbers, personal_code, pickup_point, phone, pipeline_name):
-#     url = f"{webhook_url}/crm.deal.add"
-#     stage_id = stage_mapping.get(pipeline_name, {}).get('issued', 'WON')  # Получаем идентификатор этапа "Выдан" для указанной воронки
-#     data = {
-#         'fields': {
-#             'TITLE': f'{personal_code} {pickup_point} {phone}',
-#             'CONTACT_ID': contact_id,
-#             'STAGE_ID': stage_id,  # Используем корректный идентификатор этапа "Выдан"
-#             'UF_CRM_1727870320443': weight,  # Поле Вес заказов
-#             'UF_CRM_1729104281': amount,  # Поле Сумма заказов
-#             'UF_CRM_1729115312': track_numbers,  # Поле для трек-номеров
-#             'OPENED': 'Y',  # Сделка открыта
-#         }
-#     }
-#     response = requests.post(url, json=data)
-#     if response.status_code == 200:
-#         logging.info(f"Создана новая сделка для контакта {contact_id} с весом {weight}, суммой {amount}, трек номерами {track_numbers}.")
-#         return response.json().get('result')
-#     else:
-#         logging.error(f"Ошибка при создании сделки: {response.text}")
-#         return None
-
-
-# Функция для проверки существования итоговой сделки
-def get_final_deal_for_today(contact_id, pipeline_name):
-    today_date = datetime.now().strftime('%Y-%m-%d')
-    issued_stage_id = stage_mapping.get(pipeline_name, {}).get('issued',
-                                                               'WON')  # Получаем идентификатор этапа "Выдан" для указанной воронки
-
-    url = f"{webhook_url}/crm.deal.list"
-    params = {
-        'filter': {
-            'CONTACT_ID': contact_id,
-            'STAGE_ID': issued_stage_id,  # Используем корректный этап "Выдан" для данной воронки
-            '>DATE_CREATE': today_date + 'T00:00:00',  # Сравнение по сегодняшней дате
-            '<DATE_CREATE': today_date + 'T23:59:59'
-        },
-        'select': ['ID', 'UF_CRM_1727870320443', 'UF_CRM_1729104281', 'UF_CRM_1729115312']  # Поля итоговой сделки
-    }
-    response = requests.post(url, json=params)
-    if response.status_code == 200:
-        deals = response.json().get('result')
-        if deals:
-            return deals[0]  # Возвращаем первую итоговую сделку на сегодня
-        else:
-            return None
-    else:
-        logging.error(f"Ошибка при получении итоговой сделки для контакта {contact_id}: {response.text}")
+        logging.error(f"Ошибка при создании итоговой сделки: {response.text}")
         return None
 
 
-# Функция для обновления итоговой сделки с трек-номером
 async def update_final_deal(deal_id, track_number):
     logging.info(f"Запуск обновления итоговой сделки {deal_id} с трек-номером {track_number}")
 
@@ -705,32 +699,51 @@ async def update_final_deal(deal_id, track_number):
             logging.error(f"Ошибка обновления сделки {deal_id}: {response.status_code} - {response.text}")
             return False
 
-async def create_final_deal(contact_id, weight, amount, number_of_orders, track_number, personal_code, pickup_point, phone, pipeline_stage):
-    # Получаем начальный этап для итоговой сделки в зависимости от переданной воронки
-    stage_id = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup', 'WON')  # "Ожидает выдачи" или "Выдан заказ" по умолчанию
 
-    url = f"{webhook_url}/crm.deal.add"
-    data = {
-        'fields': {
-            'TITLE': f'Итоговая сделка: {personal_code} {pickup_point} {phone}',
-            'CONTACT_ID': contact_id,
-            'STAGE_ID': stage_id,  # Установка корректного этапа
-            'UF_CRM_1723542922949': pickup_point,
-            'UF_CRM_1727870320443': weight,  # Поле Вес заказов
-            'OPPORTUNITY': float(amount),  # Поле Сумма заказов
-            'UF_CRM_1730185262': number_of_orders,  # Поле Количество заказов
-            'UF_CRM_1729115312': track_number,  # Поле для трек-номеров
-            'UF_CRM_1729539412': '1',  # Устанавливаем флаг итоговой сделки
-            'OPENED': 'Y',  # Сделка открыта
-        }
+# Архивация и удаление сделок
+def detach_contact_from_deal(deal_id, contact_id):
+    """
+    Отвязывает контакт от сделки в Битрикс.
+    """
+    url = webhook_url + 'crm.deal.contact.items.delete'
+
+    params = {
+        'ID': deal_id,
+        'CONTACT_ID': contact_id
     }
-    response = requests.post(url, json=data)
+
+    response = requests.post(url, json=params)
+
     if response.status_code == 200:
-        logging.info(f"Создана итоговая сделка для контакта {contact_id}.")
-        return response.json().get('result')
+        result = response.json().get('result')
+        if result:
+            logging.info(f"Контакт с ID {contact_id} успешно отвязан от сделки с ID {deal_id}.")
+            return True
+        else:
+            logging.error(f"Не удалось отвязать контакт с ID {contact_id} от сделки с ID {deal_id}. Ответ сервера: {response.text}")
+            return False
     else:
-        logging.error(f"Ошибка при создании итоговой сделки: {response.text}")
-        return None
+        logging.error(f"Ошибка при отвязывании контакта с ID {contact_id} от сделки с ID {deal_id}: {response.status_code}. Ответ сервера: {response.text}")
+        return False
+
+
+def delete_deal(deal_id):
+    url = webhook_url + 'crm.deal.delete'
+
+    params = {
+        'id': deal_id  # Важно передавать правильный параметр 'id' для удаления
+    }
+
+    response = requests.post(url, json=params)
+
+    if response.status_code == 200:
+        result = response.json().get('result')
+        if result:
+            logging.info(f"Сделка с ID {deal_id} успешно удалена.")
+            return True
+    else:
+        logging.error(f"Ошибка при удалении сделки с ID {deal_id}: {response.status_code}")
+        return False
 
 
 async def archive_deal(deal_id, pipeline_stage):
@@ -748,6 +761,58 @@ async def archive_deal(deal_id, pipeline_stage):
         logging.info(f"Сделка с ID {deal_id} перемещена в архив.")
 
 
+# Неиспользуемый функционал (возможно переиспользование в дальнейшей разработке)
+# def archive_deals_by_contact(contact_id, pipeline_name):
+#     # Получаем список сделок в стадии "Прибыл в пункт выдачи"
+#     deals = get_active_deals_by_contact(contact_id)
+#     track_numbers = []  # Список для трек-номеров
+#
+#     if deals:
+#         for deal in deals:
+#             deal_id = deal['ID']
+#             track_number = deal.get('UF_CRM_1723542556619')  # Получаем трек-номер
+#             if track_number:
+#                 track_numbers.append(track_number)
+#             else:
+#                 logging.info(f"Трек-номер не найден для сделки с ID {deal_id}")
+#
+#             # Используем `stage_mapping` для определения стадии "Архив"
+#             archive_stage_id = stage_mapping.get(pipeline_name, {}).get('archive', 'LOSE')
+#             update_deal_stage(deal_id, archive_stage_id)
+#             logging.info(f"Сделка с ID {deal_id} перемещена в архив.")
+#     else:
+#         logging.info(f"Нет активных сделок для контакта с ID {contact_id}.")
+#
+#     track_numbers_str = ', '.join(track_numbers)  # Преобразуем список трек-номеров в строку
+#     logging.info(f"Трек-номера для контакта {contact_id}: {track_numbers_str}")
+#     return track_numbers_str  # Возвращаем строку с трек-номерами
+
+
+# def create_new_deal(contact_id, weight, amount, track_numbers, personal_code, pickup_point, phone, pipeline_name):
+#     url = f"{webhook_url}/crm.deal.add"
+#     stage_id = stage_mapping.get(pipeline_name, {}).get('issued', 'WON')
+# Получаем идентификатор этапа "Выдан" для указанной воронки
+#     data = {
+#         'fields': {
+#             'TITLE': f'{personal_code} {pickup_point} {phone}',
+#             'CONTACT_ID': contact_id,
+#             'STAGE_ID': stage_id,  # Используем корректный идентификатор этапа "Выдан"
+#             'UF_CRM_1727870320443': weight,  # Поле Вес заказов
+#             'UF_CRM_1729104281': amount,  # Поле Сумма заказов
+#             'UF_CRM_1729115312': track_numbers,  # Поле для трек-номеров
+#             'OPENED': 'Y',  # Сделка открыта
+#         }
+#     }
+#     response = requests.post(url, json=data)
+#     if response.status_code == 200:
+#         logging.info(f"Создана новая сделка для контакта {contact_id} с весом {weight},
+#         суммой {amount}, трек номерами {track_numbers}.")
+#         return response.json().get('result')
+#     else:
+#         logging.error(f"Ошибка при создании сделки: {response.text}")
+#         return None
+
+
 # # Основная логика обработки сделки
 # def process_deal(deal_id, contact_id, weight, amount, track_number, personal_code, pickup_point, phone):
 #     final_deal = get_final_deal_for_today(contact_id)
@@ -760,32 +825,3 @@ async def archive_deal(deal_id, pipeline_stage):
 #
 #     # Перемещаем текущую сделку в архив
 #     archive_deal(deal_id)
-
-
-# Function to find the final deal for a contact
-async def find_final_deal_for_contact(contact_id, exclude_deal_id=None):
-    """
-    Ищет итоговую сделку для данного контакта по полю "Итоговая сделка".
-    """
-    url = f"{webhook_url}/crm.deal.list"
-    params = {
-        'filter': {
-            'CONTACT_ID': contact_id,
-            'UF_CRM_1729539412': '1'  # Поле для поиска итоговой сделки
-        },
-        'select': ['*']  # Запрашиваем все поля сделки
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=params)
-        if response.status_code == 200:
-            deals = response.json().get('result')
-            for deal in deals:
-                if deal['ID'] != exclude_deal_id:
-                    logging.info(f"Найдена итоговая сделка для контакта {contact_id} с ID: {deal['ID']}")
-                    return deal  # Возвращаем итоговую сделку
-            logging.info(f"Итоговая сделка для контакта {contact_id} не найдена.")
-            return None
-        else:
-            logging.error(f"Ошибка при поиске итоговой сделки для контакта {contact_id}: {response.text}")
-            return None

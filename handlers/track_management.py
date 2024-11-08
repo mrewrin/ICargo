@@ -5,8 +5,9 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from bitrix_integration import create_deal, get_deals_by_track, update_deal_contact
 from db_management import get_client_by_chat_id, save_track_number
-from keyboards import create_menu_button, create_yes_no_keyboard
+from keyboards import create_menu_button, create_track_keyboard
 from states import Track, Menu
+from handlers.utils import send_and_delete_previous
 
 
 router = Router()
@@ -26,10 +27,8 @@ async def process_track_number(message: Message, state: FSMContext):
     logging.info(f"Получен трек-номер: {track_number}")
     await state.update_data(track_number=track_number)
 
-    # Проверка на то, что трек-номер содержит только буквы и цифры
     if not track_number.isalnum():
-        await message.answer("Трек-номер должен содержать только буквы и цифры. \n" 
-                             "Введите корректный трек-номер")
+        await message.answer("Трек-номер должен содержать только буквы и цифры. \nВведите корректный трек-номер")
         return
 
     # # Проверка формата трек-номера
@@ -42,20 +41,18 @@ async def process_track_number(message: Message, state: FSMContext):
     # # Дополнительная проверка, что трек-номер начинается на "AA" и заканчивается на "CN"
     # if not (track_number.startswith("AA") and track_number.endswith("CN")):
     #     await send_and_delete_previous(message,
-    #                                    "Неверный формат трек-номера.
-    #                                    Пожалуйста, начните с 'AA' и закончите на 'CN'.\n"
+    #                                    "Неверный формат трек-номера. "
+    #                                    "Пожалуйста, начните с 'AA' и закончите на 'CN'.\n"
     #                                    "Введите корректный трек-номер",
     #                                    state=state)
     #     return
     #
     # logging.info("Формат трек-номера корректен")
 
-    # Проверка существующих сделок по трек-номеру
     deals = get_deals_by_track(track_number)
     logging.info(f"Сделки, найденные по трек-номеру: {deals}")
 
     if deals:
-        # Если сделки найдены, проверяем первую сделку
         last_deal = deals[0]
         deal_contact = last_deal.get('CONTACT_ID')
         chat_id = message.chat.id
@@ -67,7 +64,6 @@ async def process_track_number(message: Message, state: FSMContext):
         pickup_point = user_data.get('pickup_point')
 
         if deal_contact and deal_contact != user_contact_id:
-            # Если сделка привязана к другому пользователю
             await message.answer(
                 "Трек-номер, который вы ввели, уже зарегистрирован в системе и привязан к "
                 "другому пользователю. Пожалуйста, проверьте данные или введите другой "
@@ -76,7 +72,6 @@ async def process_track_number(message: Message, state: FSMContext):
             )
             return
         elif not deal_contact:
-            # Если контакт отсутствует в сделке, привязываем текущий contact_id
             logging.info(f"Сделка с трек-номером {track_number} без привязанного контакта. Обновляем контакт.")
             update_result = update_deal_contact(last_deal['ID'], user_contact_id, personal_code, phone, city,
                                                 pickup_point)
@@ -93,7 +88,6 @@ async def process_track_number(message: Message, state: FSMContext):
                     "Ошибка при обновлении сделки. Пожалуйста, попробуйте позже."
                 )
         else:
-            # Если сделка привязана к текущему пользователю, выводим статус
             deal_status = last_deal.get('STAGE_ID', 'Неизвестный статус')
             status_code_list = {
                 "C8:NEW": "Добавлен в базу",
@@ -116,7 +110,6 @@ async def process_track_number(message: Message, state: FSMContext):
                 reply_markup=create_menu_button()
             )
     else:
-        # Если сделка не найдена, создаем новую
         chat_id = message.chat.id
         logging.info(chat_id)
         user_data = get_client_by_chat_id(chat_id)
@@ -133,8 +126,7 @@ async def process_track_number(message: Message, state: FSMContext):
             if deal_id:
                 logging.info(f"Сделка успешно создана с ID: {deal_id}")
                 await message.answer(
-                    f"📄 Трек-номер {track_number} успешно добавлен!",
-                    reply_markup=create_menu_button()
+                    f"📄 Трек-номер {track_number} успешно добавлен!"
                 )
                 await state.set_state(Menu.main_menu)
             else:
@@ -149,8 +141,12 @@ async def process_track_number(message: Message, state: FSMContext):
             )
 
     # Запрашиваем у пользователя название для трек-номера
-    await message.answer("Введите название для трек-номера (для облегчения отслеживания посылки):")
-    await state.set_state(Track.track_name)  # Устанавливаем состояние для ожидания текста
+    await send_and_delete_previous(
+        message,
+        "Введите название для трек-номера (для облегчения отслеживания посылки):",
+        state=state
+    )
+    await state.set_state(Track.track_name)
 
 
 # @router.callback_query(F.data == "track_no")
@@ -165,33 +161,24 @@ async def process_track_number(message: Message, state: FSMContext):
 #     await callback.message.answer(f'Трек-номер сохранен с исходным названием {track_name}.\n'
 #                                   f'Вы можете изменить название в любое удобное время в разделе меню '
 #                                   f'"Отслеживание посылок"', reply_markup=create_menu_button())
-#     # Очищаем состояние
 #     await state.clear()
 #
 #
 # @router.callback_query(F.data == "track_yes")
 # async def process_track_named(callback: CallbackQuery, state: FSMContext):
-#     # Переходим в состояние ожидания ввода названия
 #     await callback.message.answer("Введите название для трек-номера:")
-#     await state.set_state(Track.track_name)  # Устанавливаем состояние для ожидания текста
+#     await state.set_state(Track.track_name)
 
 
-# Хэндлер для получения названия трек-номера
-
-
-# Хэндлер для получения названия трек-номера
 @router.message(Track.track_name)
 async def process_track_name_input(message: Message, state: FSMContext):
     user_data = await state.get_data()
     track_number = user_data.get('track_number')
-    track_name = message.text.strip()  # Получаем введенное пользователем название
+    track_name = message.text.strip()
     chat_id = message.chat.id
     logging.info(f"Получено название для трек-номера: {track_name}")
 
-    # Сохраняем трек-номер и его название в базу данных
     save_track_number(track_number, track_name, chat_id)
     await message.answer(f"📄 Трек-номер {track_number} с названием '{track_name}' успешно добавлен!",
-                         reply_markup=create_menu_button())
-
-    # Очищаем состояние
+                         reply_markup=create_track_keyboard(track_data=[], update_name=track_number))
     await state.clear()

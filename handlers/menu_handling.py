@@ -15,7 +15,7 @@ def register_menu_handlers(router_object):
     router_object.callback_query.register(handle_inline_menu, F.data == "main_menu")
     router_object.message.register(handle_menu_command, Command("menu"))
     router_object.callback_query.register(handle_menu_actions, F.data.in_({"add_track"}))
-    # router_object.message.register(clear_chat_and_reset_state, Command("clear"))
+    router_object.message.register(clear_chat_and_reset_state, Command("clear"))
 
 
 async def show_inline_menu_action(message_or_callback, state: FSMContext):
@@ -57,15 +57,15 @@ async def handle_menu_actions(callback: CallbackQuery, state: FSMContext):
         await state.set_state(Track.track_number)
 
 
-# @router.message(Command("clear"))
-# async def clear_chat_and_reset_state(message: Message, state: FSMContext):
-#     # Очищаем состояние FSM
-#     # await state.clear()
-#
-#     # Очищаем чат
-#     for i in range(100):
-#         try:
-#             await message.bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - i)
-#         except:
-#             continue  # Если не удалось удалить какое-то сообщение, продолжаем
-#     # await message.answer("Чат очищен, состояние сброшено.")
+@router.message(Command("clear"))
+async def clear_chat_and_reset_state(message: Message, state: FSMContext):
+    # Очищаем состояние FSM
+    # await state.clear()
+
+    # Очищаем чат
+    for i in range(100):
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - i)
+        except:
+            continue  # Если не удалось удалить какое-то сообщение, продолжаем
+    # await message.answer("Чат очищен, состояние сброшено.")

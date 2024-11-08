@@ -7,6 +7,8 @@ from db_management import get_client_by_chat_id, get_track_numbers_by_chat_id, u
 from bitrix_integration import get_deals_by_track
 from keyboards import create_track_keyboard, create_menu_button
 from states import Track
+from handlers.utils import send_and_delete_previous
+
 
 router = Router()
 
@@ -24,17 +26,14 @@ async def process_phone_search(callback: CallbackQuery, state: FSMContext):
     chat_id = callback.message.chat.id
     logging.info(f'{chat_id}')
 
-    # Получаем данные клиента
     user_data = get_client_by_chat_id(chat_id)
     phone = user_data.get('phone', None)
     logging.info(f'{phone}')
 
     if user_data:
-        # Получаем список трек-номеров для этого клиента из базы данных
         track_numbers = get_track_numbers_by_chat_id(chat_id)
 
         if track_numbers:
-            # Создаем список трек-номеров для отображения
             track_number_list = [(track[0], track[1]) for track in track_numbers]
             await callback.message.answer(f"Ваш номер телефона: {phone}, \nВаши текущие посылки:",
                                           reply_markup=create_track_keyboard(track_number_list))
@@ -47,16 +46,13 @@ async def process_phone_search(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(lambda callback: callback.data.startswith("backtrack_"))
 async def handle_track_status(callback: CallbackQuery, state: FSMContext):
-    # await callback.message.delete()  # Удаляем старое сообщение
-    track_number = callback.data.split("_")[1]  # Получаем трек-номер
+    track_number = callback.data.split("_")[1]
     logging.info(f"Получен трек-номер: {track_number}")
 
-    # Проверяем существующие трек-номера в базе данных
     track_numbers = get_track_numbers_by_chat_id(callback.message.chat.id)
     track_number_data = next((track for track in track_numbers if track[0] == track_number), None)
 
     if track_number_data:
-        # Если трек-номер найден, отправляем информацию о нем
         deals = get_deals_by_track(track_number)
         if deals:
             last_deal = deals[0]
@@ -73,19 +69,15 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             }
             deal_status_text = status_code_list.get(deal_status, "Статус неизвестен")
 
-            # Преобразуем дату в нужный формат
             if last_modified != 'Неизвестная дата':
                 last_modified = datetime.fromisoformat(last_modified)
                 last_modified = last_modified.strftime("%H:%M %d.%m.%Y")
 
-            # Убираем текущий трек-номер из списка для отображения остальных
             track_numbers.remove(track_number_data)
 
-            # Используем уже существующую функцию для создания клавиатуры
             track_keyboard = create_track_keyboard([(track[0], track[1]) for track in track_numbers],
                                                    update_name=track_number)
 
-            # Отправляем сообщение со статусом и новой клавиатурой
             await callback.message.answer(
                 f"📦 Статус по трек-номеру {track_number}: \n"
                 f"Статус: {deal_status_text}\n"
@@ -105,22 +97,20 @@ async def process_track_name_update(callback: CallbackQuery, state: FSMContext):
     track_number = callback.data.split("_", maxsplit=3)[3]
     await state.update_data(track_number=track_number)
     logging.info(track_number)
-    await callback.message.answer(f"Введите новое название для трек-номера {track_number}:")
+    await send_and_delete_previous(callback.message, f"Введите новое название для трек-номера {track_number}:", state=state)
     await state.set_state(Track.track_name_update)
 
 
-# Хэндлер для получения нового названия трек-номера
 @router.message(Track.track_name_update)
 async def process_track_name_input(message: Message, state: FSMContext):
     user_data = await state.get_data()
     track_number = user_data.get('track_number')
-    track_name = message.text.strip()  # Получаем введенное пользователем название
+    track_name = message.text.strip()
     logging.info(track_name)
     chat_id = message.chat.id
 
     logging.info(f"Изменение названия для трек-номера {track_number} на {track_name}")
 
-    # Обновляем трек-номер и его название в базе данных
     update_track_number(track_number, track_name, chat_id)
 
     await message.answer(f"📄 Трек-номер {track_number} успешно обновлен с названием '{track_name}'!",

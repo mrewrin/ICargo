@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from db_management import get_client_by_chat_id
 from keyboards import create_settings_keyboard, create_contact_keyboard, create_menu_button
 from states import Upd
+from handlers.utils import send_and_delete_previous
 
 
 router = Router()
@@ -55,6 +56,6 @@ async def show_contact_info(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "edit_contact_info")
 async def edit_contact_info(callback: CallbackQuery, state: FSMContext):
     logging.info(f"Получен запрос на редактирование контактной информации от {callback.message.chat.id}")
-    await callback.message.answer("✏️ Напишите Ваше имя сюда в чат", reply_markup=create_menu_button())
+    await send_and_delete_previous(callback.message, "✏️ Напишите Ваше имя сюда в чат", reply_markup=create_menu_button(), state=state)
     await state.set_state(Upd.name)
     logging.info(f"Состояние установлено: {await state.get_state()}")
