@@ -2,7 +2,7 @@ import requests
 import logging
 import httpx
 from datetime import datetime
-from config import webhook_url
+from config import webhook_url, bitrix
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
@@ -529,84 +529,130 @@ def update_deal_stage(deal_id, stage_id):
         return False
 
 
+# def update_standard_deal_fields(deal_id, contact_id=None, title=None, phone=None, city=None):
+#     """
+#     Обновляет стандартные поля для существующей сделки в Битрикс.
+#     """
+#     try:
+#         url = webhook_url + 'crm.deal.update'
+#
+#         fields = {}
+#         if contact_id:
+#             fields['CONTACT_ID'] = contact_id
+#         if title:
+#             fields['TITLE'] = title
+#         if phone:
+#             fields['PHONE'] = phone
+#         if city:
+#             fields['CITY'] = city
+#
+#         params_update = {
+#             'ID': deal_id,
+#             'fields': fields
+#         }
+#
+#         response = requests.post(url, json=params_update)
+#         response.raise_for_status()
+#
+#         result = response.json().get('result')
+#         if result:
+#             logging.info(f"Стандартные поля сделки {deal_id} успешно обновлены.")
+#             return True
+#         else:
+#             logging.error(f"Не удалось обновить стандартные поля сделки {deal_id}. Ответ: {response.json()}")
+#             return False
+#
+#     except requests.RequestException as e:
+#         logging.error(f"Ошибка при обновлении стандартных полей сделки {deal_id}: {e}")
+#         return False
+
 def update_standard_deal_fields(deal_id, contact_id=None, title=None, phone=None, city=None):
     """
-    Обновляет стандартные поля для существующей сделки в Битрикс.
+    Добавляет операцию обновления стандартных полей сделки в batch.
     """
-    try:
-        url = webhook_url + 'crm.deal.update'
+    fields = {}
+    if contact_id:
+        fields['CONTACT_ID'] = contact_id
+    if title:
+        fields['TITLE'] = title
+    if phone:
+        fields['PHONE'] = phone
+    if city:
+        fields['CITY'] = city
 
-        fields = {}
-        if contact_id:
-            fields['CONTACT_ID'] = contact_id
-        if title:
-            fields['TITLE'] = title
-        if phone:
-            fields['PHONE'] = phone
-        if city:
-            fields['CITY'] = city
+    operation_data = {
+        'ID': deal_id,
+        'fields': fields
+    }
+    bitrix.add_operation('crm.deal.update', operation_data)
+    logging.info(f"Операция для обновления стандартных полей сделки {deal_id} добавлена в batch.")
 
-        params_update = {
-            'ID': deal_id,
-            'fields': fields
-        }
 
-        response = requests.post(url, json=params_update)
-        response.raise_for_status()
-
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Стандартные поля сделки {deal_id} успешно обновлены.")
-            return True
-        else:
-            logging.error(f"Не удалось обновить стандартные поля сделки {deal_id}. Ответ: {response.json()}")
-            return False
-
-    except requests.RequestException as e:
-        logging.error(f"Ошибка при обновлении стандартных полей сделки {deal_id}: {e}")
-        return False
-
+# def update_custom_deal_fields(deal_id, telegram_id=None, track_number=None, pickup_point=None):
+#     """
+#     Обновляет пользовательские поля для существующей сделки в Битрикс.
+#     """
+#     try:
+#         url = webhook_url + 'crm.deal.update'
+#
+#         fields = {}
+#         if track_number:
+#             fields['UF_CRM_1723542556619'] = track_number  # Поле для трек-номера
+#         if pickup_point:
+#             pickup_mapping = {
+#                 "pv_karaganda_1": "52",
+#                 "pv_karaganda_2": "54",
+#                 "pv_astana_1": "48",
+#                 "pv_astana_2": "50"
+#             }
+#             fields['UF_CRM_1723542922949'] = pickup_mapping.get(pickup_point)  # Поле для пункта выдачи
+#         if telegram_id:
+#             fields['UF_CRM_1725179625'] = telegram_id
+#
+#         params_update = {
+#             'id': deal_id,
+#             'fields': fields
+#         }
+#
+#         response = requests.post(url, json=params_update)
+#         response.raise_for_status()
+#
+#         result = response.json().get('result')
+#         if result:
+#             logging.info(f"Пользовательские поля сделки {deal_id} успешно обновлены.")
+#             return True
+#         else:
+#             logging.error(f"Не удалось обновить пользовательские поля сделки {deal_id}. Ответ: {response.json()}")
+#             return False
+#
+#     except requests.RequestException as e:
+#         logging.error(f"Ошибка при обновлении пользовательских полей сделки {deal_id}: {e}")
+#         return False
 
 def update_custom_deal_fields(deal_id, telegram_id=None, track_number=None, pickup_point=None):
     """
-    Обновляет пользовательские поля для существующей сделки в Битрикс.
+    Добавляет операцию обновления пользовательских полей сделки в batch.
     """
-    try:
-        url = webhook_url + 'crm.deal.update'
-
-        fields = {}
-        if track_number:
-            fields['UF_CRM_1723542556619'] = track_number  # Поле для трек-номера
-        if pickup_point:
-            pickup_mapping = {
-                "pv_karaganda_1": "52",
-                "pv_karaganda_2": "54",
-                "pv_astana_1": "48",
-                "pv_astana_2": "50"
-            }
-            fields['UF_CRM_1723542922949'] = pickup_mapping.get(pickup_point)  # Поле для пункта выдачи
-        if telegram_id:
-            fields['UF_CRM_1725179625'] = telegram_id
-
-        params_update = {
-            'id': deal_id,
-            'fields': fields
+    fields = {}
+    if track_number:
+        fields['UF_CRM_1723542556619'] = track_number
+    if pickup_point:
+        pickup_mapping = {
+            "pv_karaganda_1": "52",
+            "pv_karaganda_2": "54",
+            "pv_astana_1": "48",
+            "pv_astana_2": "50"
         }
+        fields['UF_CRM_1723542922949'] = pickup_mapping.get(pickup_point)
+    if telegram_id:
+        fields['UF_CRM_1725179625'] = telegram_id
 
-        response = requests.post(url, json=params_update)
-        response.raise_for_status()
-
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Пользовательские поля сделки {deal_id} успешно обновлены.")
-            return True
-        else:
-            logging.error(f"Не удалось обновить пользовательские поля сделки {deal_id}. Ответ: {response.json()}")
-            return False
-
-    except requests.RequestException as e:
-        logging.error(f"Ошибка при обновлении пользовательских полей сделки {deal_id}: {e}")
-        return False
+    operation_data = {
+        'id': deal_id,
+        'fields': fields
+    }
+    bitrix.add_operation('crm.deal.update', operation_data)
+    logging.info(f"Операция для обновления пользовательских полей сделки {deal_id} добавлена в batch.")
 
 
 async def create_final_deal(contact_id, weight, amount, number_of_orders, track_number, personal_code, pickup_point, phone, pipeline_stage, category_id):
@@ -701,64 +747,119 @@ async def update_final_deal(deal_id, track_number):
 
 
 # Архивация и удаление сделок
+# def detach_contact_from_deal(deal_id, contact_id):
+#     """
+#     Отвязывает контакт от сделки в Битрикс.
+#     """
+#     url = webhook_url + 'crm.deal.contact.items.delete'
+#
+#     params = {
+#         'ID': deal_id,
+#         'CONTACT_ID': contact_id
+#     }
+#
+#     response = requests.post(url, json=params)
+#
+#     if response.status_code == 200:
+#         result = response.json().get('result')
+#         if result:
+#             logging.info(f"Контакт с ID {contact_id} успешно отвязан от сделки с ID {deal_id}.")
+#             return True
+#         else:
+#             logging.error(f"Не удалось отвязать контакт с ID {contact_id} от сделки с ID {deal_id}. Ответ сервера: {response.text}")
+#             return False
+#     else:
+#         logging.error(f"Ошибка при отвязывании контакта с ID {contact_id} от сделки с ID {deal_id}: {response.status_code}. Ответ сервера: {response.text}")
+#         return False
 def detach_contact_from_deal(deal_id, contact_id):
     """
-    Отвязывает контакт от сделки в Битрикс.
+    Добавляет операцию отвязывания контакта от сделки в batch.
     """
-    url = webhook_url + 'crm.deal.contact.items.delete'
-
-    params = {
+    operation_data = {
         'ID': deal_id,
         'CONTACT_ID': contact_id
     }
-
-    response = requests.post(url, json=params)
-
-    if response.status_code == 200:
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Контакт с ID {contact_id} успешно отвязан от сделки с ID {deal_id}.")
-            return True
-        else:
-            logging.error(f"Не удалось отвязать контакт с ID {contact_id} от сделки с ID {deal_id}. Ответ сервера: {response.text}")
-            return False
-    else:
-        logging.error(f"Ошибка при отвязывании контакта с ID {contact_id} от сделки с ID {deal_id}: {response.status_code}. Ответ сервера: {response.text}")
-        return False
+    bitrix.add_operation('crm.deal.contact.items.delete', operation_data)
+    logging.info(f"Операция для отвязывания контакта {contact_id} от сделки {deal_id} добавлена в batch.")
 
 
+# def delete_deal(deal_id):
+#     url = webhook_url + 'crm.deal.delete'
+#
+#     params = {
+#         'id': deal_id  # Важно передавать правильный параметр 'id' для удаления
+#     }
+#
+#     response = requests.post(url, json=params)
+#
+#     if response.status_code == 200:
+#         result = response.json().get('result')
+#         if result:
+#             logging.info(f"Сделка с ID {deal_id} успешно удалена.")
+#             return True
+#     else:
+#         logging.error(f"Ошибка при удалении сделки с ID {deal_id}: {response.status_code}")
+#         return False
 def delete_deal(deal_id):
-    url = webhook_url + 'crm.deal.delete'
-
-    params = {
-        'id': deal_id  # Важно передавать правильный параметр 'id' для удаления
+    """
+    Добавляет операцию удаления сделки в batch.
+    """
+    operation_data = {
+        'id': deal_id
     }
-
-    response = requests.post(url, json=params)
-
-    if response.status_code == 200:
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Сделка с ID {deal_id} успешно удалена.")
-            return True
-    else:
-        logging.error(f"Ошибка при удалении сделки с ID {deal_id}: {response.status_code}")
-        return False
+    bitrix.add_operation('crm.deal.delete', operation_data)
+    logging.info(f"Операция для удаления сделки {deal_id} добавлена в batch.")
 
 
-async def archive_deal(deal_id, pipeline_stage):
+# async def archive_deal(deal_id, pipeline_stage):
+#     """
+#     Перемещает сделку в архив (этап, соответствующий 'archive' в маппинге), кроме итоговых сделок.
+#     """
+#     deal_info = await get_deal_info(deal_id)
+#     is_final_deal = deal_info.get('UF_CRM_1729539412')  # Проверка, является ли сделка итоговой
+#
+#     if is_final_deal == '1':
+#         logging.info(f"Сделка {deal_id} является итоговой и не будет перемещена в архив.")
+#     else:
+#         archive_stage_id = pipeline_stage.get('archive', 'LOSE')  # Используем этап "Архив" из маппинга или 'LOSE' по умолчанию
+#         update_deal_stage(deal_id, archive_stage_id)
+#         logging.info(f"Сделка с ID {deal_id} перемещена в архив.")
+
+def archive_deal(deal_id, pipeline_stage):
     """
-    Перемещает сделку в архив (этап, соответствующий 'archive' в маппинге), кроме итоговых сделок.
+    Добавляет операцию для перемещения сделки в архив в batch.
     """
-    deal_info = await get_deal_info(deal_id)
-    is_final_deal = deal_info.get('UF_CRM_1729539412')  # Проверка, является ли сделка итоговой
+    archive_stage_id = pipeline_stage.get('archive', 'LOSE')
+    operation_data = {
+        'ID': deal_id,
+        'fields': {'STAGE_ID': archive_stage_id}
+    }
+    bitrix.add_operation('crm.deal.update', operation_data)
+    logging.info(f"Операция для перемещения сделки {deal_id} в архив добавлена в batch.")
 
-    if is_final_deal == '1':
-        logging.info(f"Сделка {deal_id} является итоговой и не будет перемещена в архив.")
-    else:
-        archive_stage_id = pipeline_stage.get('archive', 'LOSE')  # Используем этап "Архив" из маппинга или 'LOSE' по умолчанию
-        update_deal_stage(deal_id, archive_stage_id)
-        logging.info(f"Сделка с ID {deal_id} перемещена в архив.")
+
+# Пакетная обработка данных
+async def send_batch_request(batch_requests):
+    """
+    Отправляет пакетный запрос в Bitrix и возвращает результаты.
+
+    :param batch_requests: Словарь запросов для batch-метода.
+    :return: Словарь ответов от Bitrix по каждому запросу.
+    """
+    url = "https://your-bitrix-domain/rest/batch"  # Укажите ваш URL для batch-запросов
+    payload = {"cmd": batch_requests}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()  # Проверка на статус ответа
+            response_data = response.json()
+            return response_data.get("result", {}).get("result", {})
+    except httpx.HTTPStatusError as http_err:
+        logging.error(f"HTTP ошибка: {http_err}")
+    except Exception as e:
+        logging.error(f"Ошибка при отправке batch-запроса: {e}")
+    return {}
 
 
 # Неиспользуемый функционал (возможно переиспользование в дальнейшей разработке)

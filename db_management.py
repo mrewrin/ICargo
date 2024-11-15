@@ -1,6 +1,8 @@
 import sqlite3
 import random
 import logging
+import json
+from datetime import datetime
 
 
 # Инициализация и настройка базы данных
@@ -55,6 +57,48 @@ def init_db():
     all_vip_numbers = set(unique_numbers + round_numbers + repeating_numbers + mirror_numbers + sequential_numbers)
 
     cursor.executemany("INSERT OR IGNORE INTO vip_codes (vip_code) VALUES (?)", [(code,) for code in all_vip_numbers])
+
+    # Создаем таблицу для хранения необработанных вебхуков
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS webhooks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_id TEXT,  -- ID сделки или контакта
+        event_type TEXT,  -- Тип события
+        timestamp TEXT,  -- Время получения вебхука
+        processed INTEGER DEFAULT 0  -- Флаг обработки (0 - не обработан, 1 - обработан)
+    )
+    """)
+
+    # Создаем индексы для таблицы webhooks
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_webhook_entity_id ON webhooks (entity_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_webhook_processed ON webhooks (processed)")
+
+    # Создаем таблицу для хранения обработанных результатов вебхуков
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS processed_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_id INTEGER,
+        event_type TEXT,
+        data TEXT,                 -- JSON-строка для хранения дополнительных данных по обработке
+        action TEXT,               -- Тип действия: "update", "relink_contact", "archive", "notify" и т.д.
+        timestamp TEXT,            -- Время обработки
+        sent INTEGER DEFAULT 0     -- Флаг отправки (0 - не отправлено, 1 - отправлено)
+    )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS final_deals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            contact_id INTEGER NOT NULL,       -- ID контакта, связанного с итоговой сделкой
+            final_deal_id INTEGER NOT NULL,    -- ID итоговой сделки в Bitrix
+            creation_date TEXT,                -- Дата создания итоговой сделки
+            current_stage_id TEXT,             -- Текущий этап сделки
+            track_numbers TEXT,                -- Список трек-номеров, связанных с итоговой сделкой
+            total_weight REAL DEFAULT 0,       -- Общий вес заказов
+            total_amount REAL DEFAULT 0,       -- Общая сумма оплаты
+            number_of_orders INTEGER DEFAULT 0 -- Общее количество заказов
+        )
+    """)
 
     conn.commit()
     conn.close()
@@ -218,7 +262,6 @@ def check_chat_id_exists(chat_id):
     return result is not None
 
 
-# Функция для получения всех chat_id из базы данных
 def get_all_chat_ids():
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -388,3 +431,253 @@ async def delete_deal_by_track_number(track_number):
         logging.info(f"Сделка с трек номером {track_number} не найдена в базе данных.")
 
     conn.close()
+
+
+# Операции с таблицей вебхуков
+def save_webhook_to_db(entity_id, event_type):
+    """
+    Сохраняет данные вебхука в таблицу webhooks.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Текущая метка времени для записи
+    timestamp = datetime.utcnow().isoformat()
+
+    # Вставляем запись вебхука в таблицу
+    cursor.execute("""
+    INSERT INTO webhooks (entity_id, event_type, timestamp, processed)
+    VALUES (?, ?, ?, 0)
+    """, (entity_id, event_type, timestamp))
+
+    conn.commit()
+    conn.close()
+
+
+def get_latest_webhook_timestamp():
+    """
+    Получает время последнего поступившего вебхука из базы данных.
+    Возвращает datetime объекта или None, если вебхуков нет.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT timestamp
+    FROM webhooks
+    WHERE processed = 0
+    ORDER BY timestamp DESC
+    LIMIT 1
+    """)
+
+    result = cursor.fetchone()
+    conn.close()
+
+    return datetime.fromisoformat(result[0]) if result else None
+
+
+def mark_webhook_as_processed(webhook_id):
+    """
+    Помечает вебхук с заданным ID как обработанный.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    UPDATE webhooks
+    SET processed = 1
+    WHERE id = ?
+    """, (webhook_id,))
+
+    conn.commit()
+    conn.close()
+
+
+def get_unprocessed_webhooks():
+    """
+    Получает все необработанные вебхуки из базы данных.
+    Возвращает список словарей с данными вебхуков.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT id, entity_id, event_type, timestamp
+    FROM webhooks
+    WHERE processed = 0
+    ORDER BY timestamp ASC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    # Преобразуем данные в список словарей
+    webhooks = [
+        {
+            "id": row[0],
+            "entity_id": row[1],
+            "event_type": row[2],
+            "timestamp": row[3]
+        }
+        for row in rows
+    ]
+
+    return webhooks
+
+
+# Операции с таблицей результатов
+def save_processed_result(entity_id, event_type, data):
+    """
+    Сохраняет обработанные данные вебхука в таблицу processed_results.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Преобразуем данные в JSON-строку для хранения
+    data_json = json.dumps(data)
+    timestamp = datetime.utcnow().isoformat()
+
+    cursor.execute("""
+    INSERT INTO processed_results (entity_id, event_type, data, timestamp, sent)
+    VALUES (?, ?, ?, ?, 0)
+    """, (entity_id, event_type, data_json, timestamp))
+
+    conn.commit()
+    conn.close()
+
+
+def get_unprocessed_results():
+    """
+    Получает все необработанные результаты для пакетной отправки.
+    Возвращает список словарей с данными обработанных вебхуков.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT id, entity_id, event_type, data, timestamp
+    FROM processed_results
+    WHERE sent = 0
+    ORDER BY timestamp ASC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    # Преобразуем данные в список словарей
+    results = [
+        {
+            "id": row[0],
+            "entity_id": row[1],
+            "event_type": row[2],
+            "data": json.loads(row[3]),  # Декодируем JSON-строку в словарь
+            "timestamp": row[4]
+        }
+        for row in rows
+    ]
+
+    return results
+
+
+def mark_results_as_processed(result_ids):
+    """
+    Помечает обработанные результаты как отправленные.
+    """
+    # Преобразуем значения result_ids к типу int, если это строки, представляющие числа
+    processed_ids = []
+    for result_id in result_ids:
+        try:
+            processed_ids.append(int(result_id))
+        except (ValueError, TypeError):
+            logging.error(f"Некорректный ID: {result_id}, пропуск.")
+
+    # Проверяем, что processed_ids содержит данные после преобразования
+    if not processed_ids:
+        logging.error("Нет корректных ID для обновления.")
+        return
+
+    # Подключение и обновление базы данных
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.executemany("""
+        UPDATE processed_results
+        SET sent = 1
+        WHERE id = ?
+        """, [(result_id,) for result_id in processed_ids])
+
+        conn.commit()
+        logging.info("Результаты успешно помечены как отправленные.")
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка при обновлении базы данных: {e}")
+    finally:
+        conn.close()
+
+
+# Операции с таблицей итоговых сделок
+def get_final_deal_from_db(contact_id):
+    """
+    Извлекает информацию об итоговой сделке для заданного контакта из таблицы final_deals.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Извлекаем последнюю итоговую сделку для указанного контакта
+    cursor.execute("""
+        SELECT * FROM final_deals WHERE contact_id = ? ORDER BY creation_date DESC LIMIT 1
+    """, (contact_id,))
+    result = cursor.fetchone()
+
+    conn.close()
+
+    if result:
+        return {
+            'id': result[0],
+            'contact_id': result[1],
+            'final_deal_id': result[2],
+            'creation_date': result[3],
+            'current_stage_id': result[4],
+            'track_numbers': result[5],
+            'total_weight': result[6],
+            'total_amount': result[7],
+            'number_of_orders': result[8]
+        }
+    return None
+
+
+def save_final_deal_to_db(contact_id, deal_id, creation_date, track_number, current_stage_id, weight=0, amount=0, number_of_orders=1):
+    """
+    Сохраняет новую итоговую сделку в таблицу final_deals.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Вставляем новую итоговую сделку в таблицу
+    cursor.execute("""
+        INSERT INTO final_deals (contact_id, final_deal_id, creation_date, current_stage_id, track_numbers, total_weight, total_amount, number_of_orders)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (contact_id, deal_id, creation_date, current_stage_id, track_number, weight, amount, number_of_orders))
+
+    conn.commit()
+    conn.close()
+    print(f"Сохранена новая итоговая сделка с ID {deal_id} для контакта {contact_id}")
+
+
+def update_final_deal_in_db(deal_id, track_numbers, stage_id):
+    """
+    Обновляет информацию об итоговой сделке в таблице final_deals.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Обновляем трек-номера и этап текущей сделки
+    cursor.execute("""
+        UPDATE final_deals
+        SET track_numbers = ?, current_stage_id = ?
+        WHERE final_deal_id = ?
+    """, (track_numbers, stage_id, deal_id))
+
+    conn.commit()
+    conn.close()
+    print(f"Обновлена итоговая сделка с ID {deal_id}")
