@@ -3,8 +3,8 @@ from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-from bitrix_integration import create_deal, get_deals_by_track, update_deal_contact
-from db_management import get_client_by_chat_id, save_track_number
+from bitrix_integration import create_deal, get_deals_by_track, update_deal_contact, create_deal_with_stage, delete_deal
+from db_management import get_client_by_chat_id, save_track_number, save_deal_to_db
 from keyboards import create_menu_button, create_track_keyboard
 from states import Track, Menu
 from handlers.utils import send_and_delete_previous
@@ -55,14 +55,17 @@ async def process_track_number(message: Message, state: FSMContext):
     if deals:
         last_deal = deals[0]
         deal_contact = last_deal.get('CONTACT_ID')
+        pipeline_stage = last_deal.get('STAGE_ID')  # Получаем этап из last_deal
+        category_id = int(last_deal.get('CATEGORY_ID'))
+
         chat_id = message.chat.id
         user_data = get_client_by_chat_id(chat_id)
-        user_contact_id = user_data.get('contact_id')
+        user_contact_id = str(user_data.get('contact_id'))  # Преобразуем в строку
         personal_code = user_data.get('personal_code')
         phone = user_data.get('phone')
         city = user_data.get('city')
         pickup_point = user_data.get('pickup_point')
-
+        logging.info(f'Сравниваем контакт из сделки {deal_contact} с контактом из базы {user_contact_id}')
         if deal_contact and deal_contact != user_contact_id:
             await message.answer(
                 "Трек-номер, который вы ввели, уже зарегистрирован в системе и привязан к "
@@ -71,13 +74,66 @@ async def process_track_number(message: Message, state: FSMContext):
                 reply_markup=create_menu_button()
             )
             return
+        elif deal_contact == user_contact_id:
+            # Если контакт совпадает, создаем новую сделку и удаляем старую
+            logging.info(
+                f"Контакт совпадает. Создаем новую сделку на этапе {pipeline_stage} и удаляем старую сделку ID {last_deal['ID']}")
+            new_deal_id = create_deal_with_stage(
+                contact_id=user_contact_id,
+                track_number=track_number,
+                personal_code=personal_code,
+                pickup_point=pickup_point,
+                chat_id=chat_id,
+                phone=phone,
+                pipeline_stage=pipeline_stage,  # Передаем текущий этап
+                category_id=category_id  # Категория для новой сделки
+            )
+
+            if new_deal_id:
+                logging.info(f"Новая сделка создана с ID: {new_deal_id}. Удаляем старую сделку ID {last_deal['ID']}")
+                # Сохраняем данные сделки в локальную базу
+                save_deal_to_db(
+                    deal_id=new_deal_id,
+                    contact_id=user_contact_id,
+                    personal_code=personal_code,
+                    track_number=track_number,
+                    pickup_point=pickup_point,
+                    phone=phone,
+                    chat_id=chat_id
+                )
+                delete_result = delete_deal(last_deal['ID'])
+                if delete_result:
+                    logging.info(f"Старая сделка с ID {last_deal['ID']} успешно удалена.")
+                    await message.answer(
+                        f"📦 Трек-номер {track_number} успешно обновлен! Создана новая сделка.",
+                        reply_markup=create_menu_button()
+                    )
+                else:
+                    logging.error(f"Ошибка при удалении старой сделки ID {last_deal['ID']}")
+                    await message.answer(
+                        "Ошибка при обновлении сделки. Пожалуйста, попробуйте позже."
+                    )
+            else:
+                logging.error("Ошибка при создании новой сделки.")
+                await message.answer(
+                    "Ошибка при создании новой сделки. Пожалуйста, попробуйте позже."
+                )
         elif not deal_contact:
             logging.info(f"Сделка с трек-номером {track_number} без привязанного контакта. Обновляем контакт.")
-            update_result = update_deal_contact(last_deal['ID'], user_contact_id, personal_code, phone, city,
+            update_result = update_deal_contact(last_deal['ID'], user_contact_id, personal_code, chat_id, phone, city,
                                                 pickup_point)
 
             if update_result:
                 logging.info(f"Сделка обновлена: контакт {user_contact_id} добавлен к сделке {last_deal['ID']}")
+                save_deal_to_db(
+                    deal_id=last_deal['ID'],
+                    contact_id=user_contact_id,
+                    personal_code=personal_code,
+                    track_number=track_number,
+                    pickup_point=pickup_point,
+                    phone=phone,
+                    chat_id=chat_id
+                )
                 await message.answer(
                     f"📦 Трек-номер {track_number} успешно обновлен с вашим контактом!",
                     reply_markup=create_menu_button()
@@ -87,28 +143,6 @@ async def process_track_number(message: Message, state: FSMContext):
                 await message.answer(
                     "Ошибка при обновлении сделки. Пожалуйста, попробуйте позже."
                 )
-        else:
-            deal_status = last_deal.get('STAGE_ID', 'Неизвестный статус')
-            status_code_list = {
-                "C8:NEW": "Добавлен в базу",
-                "C8:PREPARATION": "Отгружен со склада Китая",
-                "C8:PREPAYMENT_INVOICE": "Прибыл в Алмату",
-                "C4:NEW": "Прибыл в ПВ№1 г.Караганда",
-                "C6:NEW": "Прибыл в ПВ№2 г.Караганда",
-                "NEW": "Прибыл в ПВ№1 г.Астана",
-                "C2:NEW": "Прибыл в ПВ№2 г.Астана"
-            }
-            deal_status_text = status_code_list.get(deal_status, "Статус неизвестен")
-            last_modified = last_deal.get('DATE_MODIFY', 'Неизвестная дата')
-            last_modified = datetime.fromisoformat(last_modified)
-            last_modified = last_modified.strftime("%H:%M %d.%m.%Y")
-            logging.info(f"Трек-номер уже в системе. Статус: {deal_status_text}, Последнее обновление: {last_modified}")
-
-            await message.answer(
-                f"📦 Трек-номер уже добавлен в систему. Статус: {deal_status_text}. "
-                f"Последнее обновление: {last_modified}",
-                reply_markup=create_menu_button()
-            )
     else:
         chat_id = message.chat.id
         logging.info(chat_id)
@@ -125,6 +159,16 @@ async def process_track_number(message: Message, state: FSMContext):
 
             if deal_id:
                 logging.info(f"Сделка успешно создана с ID: {deal_id}")
+                # Сохраняем данные сделки в локальную базу
+                save_deal_to_db(
+                    deal_id=deal_id,
+                    contact_id=contact_id,
+                    personal_code=personal_code,
+                    track_number=track_number,
+                    pickup_point=pickup_point,
+                    phone=phone,
+                    chat_id=chat_id
+                )
                 await message.answer(
                     f"📄 Трек-номер {track_number} успешно добавлен!"
                 )

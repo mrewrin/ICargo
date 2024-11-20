@@ -40,6 +40,21 @@ def init_db():
     )
     """)
 
+    # Создание таблицы tracked_deals
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tracked_deals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        deal_id INTEGER NOT NULL,          -- ID сделки в Bitrix
+        contact_id INTEGER NOT NULL,       -- ID контакта
+        personal_code TEXT,                -- Персональный код клиента
+        track_number TEXT NOT NULL UNIQUE, -- Уникальный трек-номер
+        pickup_point TEXT,                 -- Пункт выдачи
+        phone TEXT,                        -- Телефон клиента
+        chat_id INTEGER,                   -- ID чата в Telegram
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP -- Дата добавления записи
+    )
+    """)
+
     # Создаем таблицу vip_codes для хранения доступных VIP номеров
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS vip_codes (
@@ -156,6 +171,23 @@ def remove_vip_code(code):
     conn.close()
 
 
+def get_name_track_by_track_number(track_number):
+    """
+    Получает name_track по track_number из таблицы track_numbers.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT name_track FROM track_numbers WHERE track_number = ?", (track_number,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        logging.error(f"Ошибка при извлечении name_track для трек-номера {track_number}: {e}")
+        return None
+    finally:
+        conn.close()
+
+
 # Операции с данными клиентов
 def save_client_data(chat_id, contact_id, personal_code, name_cyrillic, name_translit, phone, city, pickup_point):
     conn = sqlite3.connect('clients.db')
@@ -222,7 +254,8 @@ def get_client_by_chat_id(chat_id):
             "name_translit": result[3],
             "phone": result[4],
             "city": result[5],
-            "pickup_point": result[6]
+            "pickup_point": result[6],
+            "chat_id": chat_id
         }
     else:
         return None  # Если пользователь не найден, возвращаем None
@@ -402,6 +435,85 @@ def get_all_track_numbers():
         print("Таблица track_numbers пуста.")
 
     conn.close()
+
+
+def save_deal_to_db(deal_id, contact_id, personal_code, track_number, pickup_point, phone, chat_id):
+    """
+    Сохраняет информацию о сделке в таблицу tracked_deals.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO tracked_deals (deal_id, contact_id, personal_code, track_number, pickup_point, phone, chat_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (deal_id, contact_id, personal_code, track_number, pickup_point, phone, chat_id))
+
+        conn.commit()
+        logging.info(f"Сделка ID {deal_id} с трек-номером {track_number} успешно сохранена в базе данных.")
+    except sqlite3.IntegrityError as e:
+        logging.warning(f"Сделка с трек-номером {track_number} уже существует в базе данных: {e}")
+    finally:
+        conn.close()
+
+
+def update_tracked_deal(deal_id, track_number):
+    """
+    Обновляет поле deal_id в таблице tracked_deals для заданного трек-номера.
+    :param deal_id: ID сделки.
+    :param track_number: Трек-номер сделки.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            UPDATE tracked_deals
+            SET deal_id = ?
+            WHERE track_number = ?
+        """, (deal_id, track_number))
+        conn.commit()
+        logging.info(f"Поле deal_id обновлено для трек-номера {track_number} с новым значением {deal_id}.")
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка при обновлении таблицы tracked_deals: {e}")
+    finally:
+        conn.close()
+
+
+def find_deal_by_track(track_number, current_deal_id=None):
+    """
+    Ищет сделку в локальной базе данных по трек-номеру.
+    :param track_number: Трек-номер для поиска.
+    :param current_deal_id: ID текущей сделки для исключения из результата.
+    :return: Словарь с ID сделки или None, если ничего не найдено.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Выполняем запрос к таблице tracked_deals
+    cursor.execute("""
+        SELECT deal_id
+        FROM tracked_deals
+        WHERE track_number = ?
+    """, (track_number,))
+
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        deal = {"ID": result[0]}
+
+        # Если найденная сделка совпадает с текущей, игнорируем её
+        if str(deal["ID"]) == str(current_deal_id):
+            logging.info(f"Найдена только текущая сделка ID {current_deal_id}. Пропускаем.")
+            return None
+
+        logging.info(f"Найдена сделка в базе данных с трек-номером {track_number}: {deal}")
+        return deal
+    else:
+        logging.info(f"Сделка с трек-номером {track_number} не найдена в базе данных.")
+        return None
 
 
 # Асинхронные операции
@@ -681,3 +793,22 @@ def update_final_deal_in_db(deal_id, track_numbers, stage_id):
     conn.commit()
     conn.close()
     print(f"Обновлена итоговая сделка с ID {deal_id}")
+
+
+def update_final_deal_id(contact_id, timestamp, new_deal_id):
+    """
+    Обновляет ID итоговой сделки в таблице final_deals, основываясь на contact_id и временной метке.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Обновляем ID итоговой сделки
+    cursor.execute("""
+        UPDATE final_deals
+        SET final_deal_id = ?
+        WHERE contact_id = ? AND creation_date = ?
+    """, (new_deal_id, contact_id, timestamp))
+
+    conn.commit()
+    conn.close()
+    logging.info(f"Обновлен final_deal_id для контакта {contact_id} на {new_deal_id}")

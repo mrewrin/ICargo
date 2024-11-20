@@ -1276,241 +1276,243 @@
 
 
 
+#
+# async def process_deal_add(deal_id):
+#     logging.info(f"Обработка события ONCRMDEALADD для сделки с ID: {deal_id}")
+#
+#     # Получаем информацию о сделке
+#     deal_info = await get_deal_info(deal_id)
+#     if not deal_info:
+#         logging.warning(f"Информация о сделке с ID {deal_id} не найдена.")
+#         return
+#
+#     # Проверка, является ли сделка итоговой
+#     if deal_info.get('UF_CRM_1729539412') == '1':
+#         logging.info(f"Сделка с ID {deal_id} является итоговой и не будет обработана.")
+#         return
+#
+#     # Этап и категория
+#     stage_id = deal_info.get('STAGE_ID')
+#     category_id = deal_info.get('CATEGORY_ID')
+#     awaiting_pickup_stages = {v['awaiting_pickup'] for v in stage_mapping.values()}
+#
+#     if stage_id in awaiting_pickup_stages:
+#         logging.info(f"Сделка с ID {deal_id} находится на этапе 'awaiting_pickup' и не будет обработана.")
+#         return
+#
+#     contact_id = deal_info.get('CONTACT_ID')
+#     track_number = deal_info.get('UF_CRM_1723542556619', '')
+#     weight = deal_info.get('UF_CRM_1729457411', 0)
+#     amount = deal_info.get('UF_CRM_1729457446', 0)
+#     number_of_orders = deal_info.get('UF_CRM_1730185262', 0)
+#
+#     # Инициализируем накопитель операций
+#     operations = {}
+#
+#     # Логика для альтернативной категории 8
+#     if int(category_id) == 8:
+#         if track_number:
+#             track_data = get_track_data_by_track_number(track_number)
+#             if track_data:
+#                 chat_id = track_data.get('chat_id')
+#                 client_info = get_client_by_chat_id(chat_id)
+#                 if client_info:
+#                     expected_contact_id = client_info['contact_id']
+#                     old_deal_id = find_deal_by_track_number(track_number)
+#
+#                     # Проверка и перепривязка контакта
+#                     if contact_id != expected_contact_id:
+#                         if contact_id:
+#                             operations['detach_contact'] = {
+#                                 'method': 'crm.deal.contact.items.delete',
+#                                 'params': {'ID': deal_id, 'CONTACT_ID': contact_id}
+#                             }
+#                         contact_id = expected_contact_id
+#
+#                     # Удаление старой сделки
+#                     if old_deal_id and old_deal_id['ID'] != deal_id:
+#                         operations['detach_old_contact'] = {
+#                             'method': 'crm.deal.contact.items.delete',
+#                             'params': {'ID': old_deal_id['ID'], 'CONTACT_ID': expected_contact_id}
+#                         }
+#                         operations['delete_old_deal'] = {
+#                             'method': 'crm.deal.delete',
+#                             'params': {'id': old_deal_id['ID']}
+#                         }
+#
+#                     # Обновление полей сделки
+#                     title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+#                     operations['update_deal'] = {
+#                         'method': 'crm.deal.update',
+#                         'params': {
+#                             'ID': deal_id,
+#                             'fields': {
+#                                 'CONTACT_ID': contact_id,
+#                                 'TITLE': title,
+#                                 'PHONE': client_info['phone'],
+#                                 'CITY': client_info['city'],
+#                                 'UF_CRM_1723542556619': track_number,
+#                                 'UF_CRM_1723542922949': client_info['pickup_point'],
+#                                 'UF_CRM_1725179625': chat_id
+#                             }
+#                         }
+#                     }
+#                     await send_notification_if_required(deal_id, track_number, client_info['pickup_point'])
+#
+#                 else:
+#                     logging.warning(f"Клиент с chat_id {chat_id} не найден.")
+#             else:
+#                 logging.info(f"Трек-номер {track_number} не найден в базе.")
+#
+#     else:
+#         pipeline_stage = {
+#             0: 'ПВ Астана №1',
+#             2: 'ПВ Астана №2',
+#             4: 'ПВ Караганда №1',
+#             6: 'ПВ Караганда №2'
+#         }.get(int(category_id))
+#
+#         client_info = None
+#         if track_number:
+#             track_data = get_track_data_by_track_number(track_number)
+#             if track_data:
+#                 chat_id = track_data.get('chat_id')
+#                 client_info = get_client_by_chat_id(chat_id)
+#                 if client_info:
+#                     expected_contact_id = int(client_info.get('contact_id'))
+#                     if contact_id != expected_contact_id:
+#                         operations['detach_contact'] = {
+#                             'method': 'crm.deal.contact.items.delete',
+#                             'params': {'ID': deal_id, 'CONTACT_ID': contact_id}
+#                         }
+#                         contact_id = expected_contact_id
+#
+#                     title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+#                     operations['update_deal'] = {
+#                         'method': 'crm.deal.update',
+#                         'params': {
+#                             'ID': deal_id,
+#                             'fields': {
+#                                 'CONTACT_ID': contact_id,
+#                                 'TITLE': title,
+#                                 'PHONE': client_info['phone'],
+#                                 'CITY': client_info['city'],
+#                                 'UF_CRM_1723542556619': track_number,
+#                                 'UF_CRM_1723542922949': client_info['pickup_point'],
+#                                 'UF_CRM_1725179625': chat_id
+#                             }
+#                         }
+#                     }
+#                     await send_notification_if_required(deal_id, track_number, client_info['pickup_point'])
+#
+#         if not client_info and contact_id:
+#             client_info = get_client_by_contact_id(contact_id)
+#
+#         today_date = datetime.now(timezone.utc).date()
+#         final_deal = await find_final_deal_for_contact(contact_id, exclude_deal_id=deal_id)
+#
+#         if final_deal:
+#             final_deal_creation_date = datetime.strptime(final_deal.get('DATE_CREATE')[:10], '%Y-%m-%d').date()
+#             current_stage_id = final_deal.get('STAGE_ID')
+#             expected_awaiting_pickup_stage = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup')
+#             expected_issued_stage = stage_mapping.get(pipeline_stage, {}).get('issued')
+#
+#             if current_stage_id == expected_issued_stage:
+#                 logging.info(f"Итоговая сделка для контакта {contact_id} на этапе 'issued' и не требует обновления.")
+#             elif final_deal_creation_date == today_date and current_stage_id == expected_awaiting_pickup_stage:
+#                 logging.info(f"Итоговая сделка {final_deal['ID']} обновляется для контакта {contact_id}")
+#
+#                 # Обновление трек-номера
+#                 current_track_numbers = final_deal.get('UF_CRM_1729115312', '')
+#                 updated_track_numbers = f"{current_track_numbers}, {track_number}".strip(', ') if current_track_numbers else track_number
+#                 operations['update_track_numbers'] = {
+#                     'method': 'crm.deal.update',
+#                     'params': {'id': final_deal['ID'], 'fields': {'UF_CRM_1729115312': updated_track_numbers}}
+#                 }
+#
+#                 # Архивирование текущей сделки
+#                 archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
+#                 operations['archive_deal'] = {
+#                     'method': 'crm.deal.update',
+#                     'params': {'id': deal_id, 'fields': {'STAGE_ID': archive_stage_id}}
+#                 }
+#
+#                 # Удаление трек-номера из базы
+#                 logging.info(f"Попытка удаления сделки с трек-номером {track_number} из базы данных.")
+#                 delete_result = await delete_deal_by_track_number(track_number)
+#                 if delete_result:
+#                     logging.info(f"Сделка с трек-номером {track_number} успешно удалена из базы данных.")
+#                 else:
+#                     logging.warning(f"Сделка с трек-номером {track_number} не найдена или уже была удалена.")
+#             else:
+#                 await create_final_deal(
+#                     contact_id=contact_id, weight=weight, amount=amount,
+#                     number_of_orders=number_of_orders, track_number=track_number,
+#                     personal_code=client_info['personal_code'], pickup_point=client_info['pickup_point'],
+#                     phone=client_info['phone'], pipeline_stage=pipeline_stage, category_id=category_id
+#                 )
+#                 archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
+#                 operations['archive_deal'] = {
+#                     'method': 'crm.deal.update',
+#                     'params': {'id': deal_id, 'fields': {'STAGE_ID': archive_stage_id}}
+#                 }
+#                 await delete_deal_by_track_number(track_number)
+#         else:
+#             await create_final_deal(
+#                 contact_id=contact_id, weight=weight, amount=amount,
+#                 number_of_orders=number_of_orders, track_number=track_number,
+#                 personal_code=client_info['personal_code'], pickup_point=client_info['pickup_point'],
+#                 phone=client_info['phone'], pipeline_stage=pipeline_stage, category_id=category_id
+#             )
+#             archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
+#             operations['archive_deal'] = {
+#                 'method': 'crm.deal.update',
+#                 'params': {'id': deal_id, 'fields': {'STAGE_ID': archive_stage_id}}
+#             }
+#             await delete_deal_by_track_number(track_number)
+#
+#     # Выполняем все накопленные операции через call_batch
+#     if operations:
+#         response = await bitrix.call_batch(operations)
+#         if 'error' in response:
+#             logging.error(f"Ошибка при выполнении batch операций: {response['error_description']}")
+#         else:
+#             logging.info(f"Batch операции успешно выполнены: {response}")
+#
+#             # Определение маппинга стадий для каждой воронки
+#             stage_mapping = {
+#                 'ПВ Астана №1': {
+#                     'arrived': 'NEW',
+#                     'awaiting_pickup': 'UC_MJZYDP',
+#                     'archive': 'LOSE',
+#                     'issued': 'WON'
+#                 },
+#                 'ПВ Астана №2': {
+#                     'arrived': 'C2:NEW',
+#                     'awaiting_pickup': 'C2:UC_8EQX6X',
+#                     'archive': 'C2:LOSE',
+#                     'issued': 'C2:WON'
+#                 },
+#                 'ПВ Караганда №1': {
+#                     'arrived': 'C4:NEW',
+#                     'awaiting_pickup': 'C4:UC_VOLZYJ',
+#                     'archive': 'C4:LOSE',
+#                     'issued': 'C4:WON'
+#                 },
+#                 'ПВ Караганда №2': {
+#                     'arrived': 'C6:NEW',
+#                     'awaiting_pickup': 'C6:UC_VEHS4L',
+#                     'archive': 'C6:LOSE',
+#                     'issued': 'C6:WON'
+#                 }
+#             }
+#
+#             def get_pipeline_stage(category_id):
+#                 return {
+#                     0: 'ПВ Астана №1',
+#                     2: 'ПВ Астана №2',
+#                     4: 'ПВ Караганда №1',
+#                     6: 'ПВ Караганда №2'
+#                 }.get(category_id, 'ПВ Астана №1')  # Значение по умолчанию
 
-async def process_deal_add(deal_id):
-    logging.info(f"Обработка события ONCRMDEALADD для сделки с ID: {deal_id}")
 
-    # Получаем информацию о сделке
-    deal_info = await get_deal_info(deal_id)
-    if not deal_info:
-        logging.warning(f"Информация о сделке с ID {deal_id} не найдена.")
-        return
-
-    # Проверка, является ли сделка итоговой
-    if deal_info.get('UF_CRM_1729539412') == '1':
-        logging.info(f"Сделка с ID {deal_id} является итоговой и не будет обработана.")
-        return
-
-    # Этап и категория
-    stage_id = deal_info.get('STAGE_ID')
-    category_id = deal_info.get('CATEGORY_ID')
-    awaiting_pickup_stages = {v['awaiting_pickup'] for v in stage_mapping.values()}
-
-    if stage_id in awaiting_pickup_stages:
-        logging.info(f"Сделка с ID {deal_id} находится на этапе 'awaiting_pickup' и не будет обработана.")
-        return
-
-    contact_id = deal_info.get('CONTACT_ID')
-    track_number = deal_info.get('UF_CRM_1723542556619', '')
-    weight = deal_info.get('UF_CRM_1729457411', 0)
-    amount = deal_info.get('UF_CRM_1729457446', 0)
-    number_of_orders = deal_info.get('UF_CRM_1730185262', 0)
-
-    # Инициализируем накопитель операций
-    operations = {}
-
-    # Логика для альтернативной категории 8
-    if int(category_id) == 8:
-        if track_number:
-            track_data = get_track_data_by_track_number(track_number)
-            if track_data:
-                chat_id = track_data.get('chat_id')
-                client_info = get_client_by_chat_id(chat_id)
-                if client_info:
-                    expected_contact_id = client_info['contact_id']
-                    old_deal_id = find_deal_by_track_number(track_number)
-
-                    # Проверка и перепривязка контакта
-                    if contact_id != expected_contact_id:
-                        if contact_id:
-                            operations['detach_contact'] = {
-                                'method': 'crm.deal.contact.items.delete',
-                                'params': {'ID': deal_id, 'CONTACT_ID': contact_id}
-                            }
-                        contact_id = expected_contact_id
-
-                    # Удаление старой сделки
-                    if old_deal_id and old_deal_id['ID'] != deal_id:
-                        operations['detach_old_contact'] = {
-                            'method': 'crm.deal.contact.items.delete',
-                            'params': {'ID': old_deal_id['ID'], 'CONTACT_ID': expected_contact_id}
-                        }
-                        operations['delete_old_deal'] = {
-                            'method': 'crm.deal.delete',
-                            'params': {'id': old_deal_id['ID']}
-                        }
-
-                    # Обновление полей сделки
-                    title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
-                    operations['update_deal'] = {
-                        'method': 'crm.deal.update',
-                        'params': {
-                            'ID': deal_id,
-                            'fields': {
-                                'CONTACT_ID': contact_id,
-                                'TITLE': title,
-                                'PHONE': client_info['phone'],
-                                'CITY': client_info['city'],
-                                'UF_CRM_1723542556619': track_number,
-                                'UF_CRM_1723542922949': client_info['pickup_point'],
-                                'UF_CRM_1725179625': chat_id
-                            }
-                        }
-                    }
-                    await send_notification_if_required(deal_id, track_number, client_info['pickup_point'])
-
-                else:
-                    logging.warning(f"Клиент с chat_id {chat_id} не найден.")
-            else:
-                logging.info(f"Трек-номер {track_number} не найден в базе.")
-
-    else:
-        pipeline_stage = {
-            0: 'ПВ Астана №1',
-            2: 'ПВ Астана №2',
-            4: 'ПВ Караганда №1',
-            6: 'ПВ Караганда №2'
-        }.get(int(category_id))
-
-        client_info = None
-        if track_number:
-            track_data = get_track_data_by_track_number(track_number)
-            if track_data:
-                chat_id = track_data.get('chat_id')
-                client_info = get_client_by_chat_id(chat_id)
-                if client_info:
-                    expected_contact_id = int(client_info.get('contact_id'))
-                    if contact_id != expected_contact_id:
-                        operations['detach_contact'] = {
-                            'method': 'crm.deal.contact.items.delete',
-                            'params': {'ID': deal_id, 'CONTACT_ID': contact_id}
-                        }
-                        contact_id = expected_contact_id
-
-                    title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
-                    operations['update_deal'] = {
-                        'method': 'crm.deal.update',
-                        'params': {
-                            'ID': deal_id,
-                            'fields': {
-                                'CONTACT_ID': contact_id,
-                                'TITLE': title,
-                                'PHONE': client_info['phone'],
-                                'CITY': client_info['city'],
-                                'UF_CRM_1723542556619': track_number,
-                                'UF_CRM_1723542922949': client_info['pickup_point'],
-                                'UF_CRM_1725179625': chat_id
-                            }
-                        }
-                    }
-                    await send_notification_if_required(deal_id, track_number, client_info['pickup_point'])
-
-        if not client_info and contact_id:
-            client_info = get_client_by_contact_id(contact_id)
-
-        today_date = datetime.now(timezone.utc).date()
-        final_deal = await find_final_deal_for_contact(contact_id, exclude_deal_id=deal_id)
-
-        if final_deal:
-            final_deal_creation_date = datetime.strptime(final_deal.get('DATE_CREATE')[:10], '%Y-%m-%d').date()
-            current_stage_id = final_deal.get('STAGE_ID')
-            expected_awaiting_pickup_stage = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup')
-            expected_issued_stage = stage_mapping.get(pipeline_stage, {}).get('issued')
-
-            if current_stage_id == expected_issued_stage:
-                logging.info(f"Итоговая сделка для контакта {contact_id} на этапе 'issued' и не требует обновления.")
-            elif final_deal_creation_date == today_date and current_stage_id == expected_awaiting_pickup_stage:
-                logging.info(f"Итоговая сделка {final_deal['ID']} обновляется для контакта {contact_id}")
-
-                # Обновление трек-номера
-                current_track_numbers = final_deal.get('UF_CRM_1729115312', '')
-                updated_track_numbers = f"{current_track_numbers}, {track_number}".strip(', ') if current_track_numbers else track_number
-                operations['update_track_numbers'] = {
-                    'method': 'crm.deal.update',
-                    'params': {'id': final_deal['ID'], 'fields': {'UF_CRM_1729115312': updated_track_numbers}}
-                }
-
-                # Архивирование текущей сделки
-                archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
-                operations['archive_deal'] = {
-                    'method': 'crm.deal.update',
-                    'params': {'id': deal_id, 'fields': {'STAGE_ID': archive_stage_id}}
-                }
-
-                # Удаление трек-номера из базы
-                logging.info(f"Попытка удаления сделки с трек-номером {track_number} из базы данных.")
-                delete_result = await delete_deal_by_track_number(track_number)
-                if delete_result:
-                    logging.info(f"Сделка с трек-номером {track_number} успешно удалена из базы данных.")
-                else:
-                    logging.warning(f"Сделка с трек-номером {track_number} не найдена или уже была удалена.")
-            else:
-                await create_final_deal(
-                    contact_id=contact_id, weight=weight, amount=amount,
-                    number_of_orders=number_of_orders, track_number=track_number,
-                    personal_code=client_info['personal_code'], pickup_point=client_info['pickup_point'],
-                    phone=client_info['phone'], pipeline_stage=pipeline_stage, category_id=category_id
-                )
-                archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
-                operations['archive_deal'] = {
-                    'method': 'crm.deal.update',
-                    'params': {'id': deal_id, 'fields': {'STAGE_ID': archive_stage_id}}
-                }
-                await delete_deal_by_track_number(track_number)
-        else:
-            await create_final_deal(
-                contact_id=contact_id, weight=weight, amount=amount,
-                number_of_orders=number_of_orders, track_number=track_number,
-                personal_code=client_info['personal_code'], pickup_point=client_info['pickup_point'],
-                phone=client_info['phone'], pipeline_stage=pipeline_stage, category_id=category_id
-            )
-            archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
-            operations['archive_deal'] = {
-                'method': 'crm.deal.update',
-                'params': {'id': deal_id, 'fields': {'STAGE_ID': archive_stage_id}}
-            }
-            await delete_deal_by_track_number(track_number)
-
-    # Выполняем все накопленные операции через call_batch
-    if operations:
-        response = await bitrix.call_batch(operations)
-        if 'error' in response:
-            logging.error(f"Ошибка при выполнении batch операций: {response['error_description']}")
-        else:
-            logging.info(f"Batch операции успешно выполнены: {response}")
-
-            # Определение маппинга стадий для каждой воронки
-            stage_mapping = {
-                'ПВ Астана №1': {
-                    'arrived': 'NEW',
-                    'awaiting_pickup': 'UC_MJZYDP',
-                    'archive': 'LOSE',
-                    'issued': 'WON'
-                },
-                'ПВ Астана №2': {
-                    'arrived': 'C2:NEW',
-                    'awaiting_pickup': 'C2:UC_8EQX6X',
-                    'archive': 'C2:LOSE',
-                    'issued': 'C2:WON'
-                },
-                'ПВ Караганда №1': {
-                    'arrived': 'C4:NEW',
-                    'awaiting_pickup': 'C4:UC_VOLZYJ',
-                    'archive': 'C4:LOSE',
-                    'issued': 'C4:WON'
-                },
-                'ПВ Караганда №2': {
-                    'arrived': 'C6:NEW',
-                    'awaiting_pickup': 'C6:UC_VEHS4L',
-                    'archive': 'C6:LOSE',
-                    'issued': 'C6:WON'
-                }
-            }
-
-            def get_pipeline_stage(category_id):
-                return {
-                    0: 'ПВ Астана №1',
-                    2: 'ПВ Астана №2',
-                    4: 'ПВ Караганда №1',
-                    6: 'ПВ Караганда №2'
-                }.get(category_id, 'ПВ Астана №1')  # Значение по умолчанию

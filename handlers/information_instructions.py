@@ -35,7 +35,7 @@ async def process_create_instructions(callback: CallbackQuery, state: FSMContext
         instructions = {
             "pv_astana_1": (
                 f"🙏🏻 Спасибо, {name_cyrillic}!\n\n"
-                f"📌 Ваш персональный код: {personal_code}\n\n"
+                f"📌 Ваш персональный код: AST{personal_code}\n\n"
                 f"📖 Инструкция по заполнению адреса склада в Китае:\n"
                 f"1) 佳人AST{personal_code}\n"
                 f"2) 18346727700\n"
@@ -44,7 +44,7 @@ async def process_create_instructions(callback: CallbackQuery, state: FSMContext
             ),
             "pv_karaganda_1": (
                 f"🙏🏻 Спасибо, {name_cyrillic}!\n\n"
-                f"📌 Ваш персональный код: {personal_code}\n\n"              
+                f"📌 Ваш персональный код: KRG{personal_code}\n\n"              
                 f"📖 Инструкция по заполнению адреса склада в Китае:\n"
                 f"1) 才子KRG{personal_code}\n"
                 f"2) 18346727700\n"

@@ -6,7 +6,7 @@ from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from db_management import save_client_data, check_chat_id_exists, generate_unique_code
 from handlers.menu_handling import show_inline_menu
-from functions import transliterate, format_phone, validate_phone
+from functions import transliterate, format_phone, validate_phone, generate_address_instructions
 from keyboards import create_inline_main_menu, create_city_keyboard, create_pickup_keyboard, create_yes_no_keyboard
 from bitrix_integration import create_contact
 from states import Reg
@@ -149,19 +149,13 @@ async def process_pickup(callback: CallbackQuery, state: FSMContext):
     )
 
     if contact_id:
-        final_message = (
-            f"🙏 Спасибо, {user_data['name_cyrillic']}!\n\n"
-            f"📌 Ваш код: 讠AUG{personal_code}\n\n"
-            f"📋 Инструкция по заполнению адреса склада в Китае:\n"
-            f"1) 讠AUG{personal_code}\n"
-            f"2) 18957788787\n"
-            f"3) 浙江省 金华市 义乌市\n"
-            f"4) 福田街道 龙岗路一街6号 8787库房\n"
-            f"({personal_code}_{user_data['name_translit']}_{pickup_point.upper()})\n\n"
-            f"❗ 3 пункт нужно вводить вручную, остальное можно скопировать и вставить.\n\n"
-            f"👇 Ссылка на группу: тут будет ссылка\n"
+        instruction_message = generate_address_instructions(
+            name_cyrillic=name_cyrillic,
+            personal_code=personal_code,
+            name_translit=name_translit,
+            pickup_point_code=pickup_point
         )
-        sent_message = await callback.message.answer(final_message, reply_markup=create_inline_main_menu())
+        sent_message = await callback.message.answer(instruction_message, reply_markup=create_inline_main_menu())
         try:
             await callback.message.bot.pin_chat_message(chat_id=callback.message.chat.id, message_id=sent_message.message_id)
             await state.clear()

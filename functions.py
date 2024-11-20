@@ -62,3 +62,39 @@ def validate_phone(phone):
     """
     pattern = re.compile(r'^\+7\d{10}$')
     return pattern.match(phone)
+
+
+def generate_address_instructions(name_cyrillic, personal_code, name_translit, pickup_point_code):
+    """
+    Генерирует инструкцию по заполнению адреса на основе пункта выдачи.
+    """
+    instructions = {
+        "pv_astana_1": (
+            f"🙏🏻 Спасибо, {name_cyrillic}!\n\n"
+            f"📌 Ваш персональный код: AST{personal_code}\n\n"
+            f"📖 Инструкция по заполнению адреса склада в Китае:\n"
+            f"1) 佳人AST{personal_code}\n"
+            f"2) 18346727700\n"
+            f"3) 广东省 佛山市 丹灶镇\n"
+            f"4) 金沙银沙南路88号 (佳人AST{personal_code}_{name_translit}_ASTANA+ESIL)"
+        ),
+        "pv_astana_2": (
+            f"🙏🏻 Спасибо, {name_cyrillic}!\n\n"
+            f"📌 Ваш персональный код: AST{personal_code}\n\n"
+            f"📖 Инструкция по заполнению адреса склада в Китае:\n"
+            f"1) 佳人AST{personal_code}\n"
+            f"2) 18346727700\n"
+            f"3) 广东省 佛山市 丹灶镇\n"
+            f"4) 金沙银沙南路88号 (佳人AST{personal_code}_{name_translit}_ASTANA+ESIL)"
+        ),
+        "pv_karaganda_1": (
+            f"🙏🏻 Спасибо, {name_cyrillic}!\n\n"
+            f"📌 Ваш персональный код: KRG{personal_code}\n\n"              
+            f"📖 Инструкция по заполнению адреса склада в Китае:\n"
+            f"1) 才子KRG{personal_code}\n"
+            f"2) 18346727700\n"
+            f"3) 广东省 佛山市 南海区\n"
+            f"4) 丹灶镇金沙银沙南路88号 (才子KRG{personal_code}_{name_translit}_KRG+CENTR)"
+        )
+    }
+    return instructions.get(pickup_point_code, "Пункт выдачи не указан или не поддерживается.")

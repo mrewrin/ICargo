@@ -69,7 +69,7 @@ async def webhook_timer():
         if unprocessed_webhooks:
             last_webhook_time = datetime.fromisoformat(unprocessed_webhooks[-1]["timestamp"])
             if (datetime.utcnow() - last_webhook_time).total_seconds() > IDLE_THRESHOLD:
-                logging.info("Простое вебхуков зафиксировано. Запуск обработки...")
+                logging.info("Простой вебхуков зафиксирован. Запуск обработки...")
                 await batch_send_to_bitrix()
             else:
                 logging.info("Новые вебхуки продолжают поступать. Ожидаем простоя для обработки.")
