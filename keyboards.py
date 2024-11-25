@@ -48,17 +48,17 @@ def create_settings_keyboard():
 def create_city_keyboard():
     city_keyboard = InlineKeyboardBuilder()
     city_keyboard.add(InlineKeyboardButton(text="Астана", callback_data="city_astana"))
-    city_keyboard.add(InlineKeyboardButton(text="Караганда", callback_data="city_karaganda"))
+    # city_keyboard.add(InlineKeyboardButton(text="Караганда", callback_data="city_karaganda"))
     return city_keyboard.as_markup()
 
 
 def create_pickup_keyboard(city):
     pickup_keyboard = InlineKeyboardBuilder()
     if city == 'astana':
-        pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана №1", callback_data="pv_astana_1"))
-        pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана №2", callback_data="pv_astana_2"))
-    elif city == 'karaganda':
-        pickup_keyboard.add(InlineKeyboardButton(text="ПВ Караганда №1", callback_data="pv_karaganda_1"))
+        pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана-Есиль", callback_data="pv_astana_1"))
+        # pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана №2", callback_data="pv_astana_2"))
+    # elif city == 'karaganda':
+    #     pickup_keyboard.add(InlineKeyboardButton(text="ПВ Караганда №1", callback_data="pv_karaganda_1"))
         # pickup_keyboard.add(InlineKeyboardButton(text="ПВ Караганда №2", callback_data="pv_karaganda_2"))
     return pickup_keyboard.as_markup()
 

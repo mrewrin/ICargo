@@ -115,6 +115,14 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS deal_tasks (
+            deal_id INTEGER PRIMARY KEY,
+            task_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -812,3 +820,41 @@ def update_final_deal_id(contact_id, timestamp, new_deal_id):
     conn.commit()
     conn.close()
     logging.info(f"Обновлен final_deal_id для контакта {contact_id} на {new_deal_id}")
+
+
+# Функция для сохранения TASK_ID в базу данных
+def save_task_to_db(deal_id, task_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT OR REPLACE INTO deal_tasks (deal_id, task_id) VALUES (?, ?)',
+        (deal_id, task_id)
+    )
+    conn.commit()
+    conn.close()
+    logging.info(f"Сохранен task_id {task_id} для сделки deal_id {deal_id}.")
+
+
+# Функция для получения TASK_ID по DEAL_ID из базы данных
+def get_task_id_by_deal_id(deal_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT task_id FROM deal_tasks WHERE deal_id = ?',
+        (deal_id,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+
+def delete_task_from_db(deal_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'DELETE FROM deal_tasks WHERE deal_id = ?',
+        (deal_id,)
+    )
+    conn.commit()
+    conn.close()
+    logging.info(f"Удалена запись из базы данных для сделки deal_id {deal_id}.")

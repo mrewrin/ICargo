@@ -1,10 +1,10 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bot_instance import bot
 from db_management import get_personal_code_by_chat_id, get_track_data_by_track_number, get_client_by_chat_id, \
     get_client_by_contact_id, delete_deal_by_track_number, get_chat_id_by_contact_id, save_final_deal_to_db, \
     update_final_deal_in_db, get_final_deal_from_db, get_name_track_by_track_number, find_deal_by_track, \
-    update_tracked_deal
+    update_tracked_deal, get_task_id_by_deal_id, delete_task_from_db
 
 
 # Определение маппинга стадий для каждой воронки
@@ -144,8 +144,41 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                 )
                 # Обновляем таблицу tracked_deals
                 update_tracked_deal(deal_id, track_number)
+
                 logging.info(f"Операция обновления сделки добавлена для ID {deal_id}.")
                 await send_notification_if_required(deal_info, chat_id, track_number, client_info['pickup_point'])
+
+                # Проверяем этап "Прибыл в Алмату"
+                almaty_stage_id = "C8:PREPAYMENT_INVOICE"
+
+                if stage_id == almaty_stage_id:
+                    logging.info(
+                        f"Сделка {deal_id} находится на этапе 'Прибыл в Алмату'. Добавляем задачу с дедлайном через 3 дня.")
+
+                    # Заголовок и описание задачи
+                    task_title = f"Контроль этапа: сделка {deal_id}"
+                    task_description = (
+                        f"Сделка {deal_id} находится на этапе 'Прибыл в Алмату' более 3 дней. "
+                        f"Контакт: {client_info['phone']}, пункт выдачи: {client_info['pickup_point']}."
+                    )
+
+                    # Устанавливаем дату старта через 3 дня и дедлайн
+                    start_date = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%dT%H:%M:%S')
+                    deadline = (datetime.now() + timedelta(days=6)).strftime(
+                        '%Y-%m-%dT%H:%M:%S')  # Дедлайн через 6 дней
+
+                    # Добавляем задачу
+                    operations[f"almaty_task_{deal_id}"] = (
+                        f"tasks.task.add?"
+                        f"fields[TITLE]={task_title}&"
+                        f"fields[DESCRIPTION]={task_description}&"
+                        f"fields[RESPONSIBLE_ID]=1&"
+                        f"fields[PRIORITY]=2&"
+                        f"fields[UF_CRM_TASK]=D_{deal_id}&"
+                        f"fields[CREATED_DATE]={start_date}&"
+                        f"fields[DEADLINE]={deadline}"
+                    )
+                    logging.info(f"Задача для сделки {deal_id} добавлена в operations.")
             else:
                 logging.warning(f"Клиент с chat_id {chat_id} не найден. Проверка завершена.")
         else:
@@ -155,6 +188,37 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                 'track_number': track_number,
                 'STAGE_ID': stage_id  # Добавляем этап сделки
             })
+            # Проверяем этап "Прибыл в Алмату"
+            almaty_stage_id = "C8:PREPAYMENT_INVOICE"
+
+            if stage_id == almaty_stage_id:
+                logging.info(
+                    f"Сделка {deal_id} находится на этапе 'Прибыл в Алмату'. Добавляем задачу с дедлайном через 3 дня.")
+
+                # Заголовок и описание задачи
+                task_title = f"Контроль этапа: сделка {deal_id}"
+                task_description = (
+                    f"Сделка {deal_id} находится на этапе 'Прибыл в Алмату' более 3 дней. "
+                )
+
+                # Устанавливаем дату старта через 3 дня и дедлайн
+                start_date = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%dT%H:%M:%S')
+                deadline = (datetime.now() + timedelta(days=6)).strftime(
+                    '%Y-%m-%dT%H:%M:%S')  # Дедлайн через 6 дней
+
+                # Добавляем задачу
+                operations[f"almaty_task_{deal_id}"] = (
+                    f"tasks.task.add?"
+                    f"fields[TITLE]={task_title}&"
+                    f"fields[DESCRIPTION]={task_description}&"
+                    f"fields[RESPONSIBLE_ID]=1&"
+                    f"fields[PRIORITY]=2&"
+                    f"fields[UF_CRM_TASK]=D_{deal_id}&"
+                    f"fields[CREATED_DATE]={start_date}&"
+                    f"fields[DEADLINE]={deadline}"
+                )
+                logging.info(f"Задача для сделки {deal_id} добавлена в operations.")
+
     else:
         # Обработка для других категорий
         pipeline_stage = {
@@ -192,16 +256,30 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                     else:
                         old_stage_id = duplicate_deal.get('STAGE_ID')
                         expected_stage_id = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup')
+                        # Удаление дубликата
                         if not duplicate_deal.get('CONTACT_ID') or old_stage_id != expected_stage_id:
                             logging.info(
                                 f"Удаление дубликата ID {duplicate_deal['ID']} для трек-номера {track_number}. Этап дубликата: {old_stage_id}, ожидаемый этап: {expected_stage_id}."
                             )
+
+                            # Добавляем операцию удаления сделки
                             operations[
                                 f"delete_old_deal_{duplicate_deal['ID']}"] = f"crm.deal.delete?id={duplicate_deal['ID']}"
-                        else:
-                            logging.info(
-                                f"Дубликат ID {duplicate_deal['ID']} не удалён: соответствует ожиданиям (этап: {old_stage_id})."
-                            )
+
+                            # Получение TASK_ID по ID сделки
+                            task_id = get_task_id_by_deal_id(duplicate_deal['ID'])
+                            if task_id:
+                                # Добавляем операцию удаления задачи
+                                operations[f"delete_task_{task_id}"] = f"tasks.task.delete?taskId={task_id}"
+                                logging.info(
+                                    f"Добавлена операция удаления задачи с ID {task_id} для дубликата {duplicate_deal['ID']}.")
+
+                                # Удаление записи о задаче из базы данных
+                                delete_task_from_db(duplicate_deal['ID'])
+                                logging.info(
+                                    f"Удалена запись о задаче с task_id {task_id} для сделки {duplicate_deal['ID']} из базы данных.")
+                            else:
+                                logging.info(f"Для дубликата {duplicate_deal['ID']} не найдена привязанная задача.")
 
                 # Проверка и перепривязка контакта
                 if contact_id != expected_contact_id:
@@ -309,7 +387,51 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                     logging.warning(f"Сделка с трек-номером {track_number} не найдена или уже была удалена.")
 
             else:
-                logging.warning(f"Условия для обновления или архивирования итоговой сделки не выполнены.")
+                # Проверка необходимости создания новой итоговой сделки
+                if final_deal_creation_date != today_date:
+                    # Маппинг для пункта выдачи
+                    pickup_mapping = {
+                        "pv_karaganda_1": "52",
+                        "pv_karaganda_2": "54",
+                        "pv_astana_1": "48",
+                        "pv_astana_2": "50"
+                    }
+                    pickup_point_mapped = pickup_mapping.get(client_info['pickup_point'], "неизвестно")
+                    # Обновляем текущую сделку как итоговую
+                    operations[f"update_deal_as_final_{deal_id}"] = (
+                        f"crm.deal.update?ID={deal_id}&fields[TITLE]=Итоговая сделка: {client_info['personal_code']} "
+                        f"{client_info['pickup_point']} {client_info['phone']}&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
+                        f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
+                        f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}&fields[UF_CRM_1730185262]={number_of_orders}"
+                        f"&fields[UF_CRM_1729115312]={track_number}&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
+                    )
+                    logging.info(f"Обновление текущей сделки как итоговой добавлено в операции: {deal_id}.")
+
+                    # Создаём копию текущей сделки в архивном этапе
+                    archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
+                    operations[f"create_copy_of_deal_{contact_id}"] = (
+                        f"crm.deal.add?"
+                        f"fields[TITLE]={client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}&"
+                        f"fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={archive_stage_id}&"
+                        f"fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}&"
+                        f"fields[UF_CRM_1727870320443]=0&fields[OPPORTUNITY]=0&"
+                        f"fields[UF_CRM_1725179625]={client_info['chat_id']}&fields[UF_CRM_1723542556619]={track_number}&"
+                        f"fields[UF_CRM_1729539412]=1"
+                    )
+                    logging.info(f"Создание копии сделки добавлено в операции: {deal_id}.")
+
+                    # Сохраняем текущую сделку как итоговую в базу данных
+                    save_final_deal_to_db(
+                        contact_id=contact_id,
+                        deal_id=deal_id,
+                        creation_date=today_date.isoformat(),
+                        track_number=track_number,
+                        current_stage_id=expected_awaiting_pickup_stage,  # Этап итоговой сделки
+                        weight=weight,
+                        amount=amount,
+                        number_of_orders=number_of_orders
+                    )
+                    logging.info(f"Обновлена и сохранена текущая сделка {deal_id} как итоговая в базу данных.")
 
         if not final_deal:
             logging.warning(
@@ -368,8 +490,49 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                 f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
                 f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}&fields[UF_CRM_1730185262]={number_of_orders}"
                 f"&fields[UF_CRM_1729115312]={track_number}&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
-
             )
+            # Маппинг для проверки соответствия пункта выдачи стадии
+            task_mapping = {
+                "52": "C4:NEW",
+                "48": "C6:NEW",
+                "50": "C2:NEW"
+            }
+            exp_stage = task_mapping.get(pickup_point_mapped)
+            # Проверяем соответствие пункта выдачи стадии
+            if stage_id != exp_stage:
+                logging.warning(
+                    f"Несоответствие текущей стадии {stage_id} и ожидаемой стадии сделки {exp_stage}.")
+
+                # Формируем новый заголовок для сделки
+                incorrect_title = f"НЕВЕРНЫЙ ПУНКТ ВЫДАЧИ: {client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+
+                # Добавляем операцию изменения поля TITLE в сделке
+                operations[f"update_deal_title_{deal_id}"] = (
+                    f"crm.deal.update?ID={deal_id}&fields[TITLE]={incorrect_title}"
+                )
+                logging.info(f"Обновление TITLE для сделки {deal_id} на '{incorrect_title}' добавлено в operations.")
+
+                # Формируем заголовок и описание задачи
+                task_title = f"Некорректный пункт выдачи! Проверьте сделку {deal_id}"
+                task_description = (
+                    f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
+                    f"Ожидалась стадия: {exp_stage}, текущая стадия: {stage_id}. "
+                    f"Контакт: {client_info['phone']}."
+                )
+                deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+
+                # Добавляем операцию создания задачи
+                operations[f"create_task_{deal_id}"] = (
+                    f"tasks.task.add?"
+                    f"fields[TITLE]={task_title}&"
+                    f"fields[DESCRIPTION]={task_description}&"
+                    f"fields[RESPONSIBLE_ID]=1&"
+                    f"fields[PRIORITY]=2&"
+                    f"fields[UF_CRM_TASK]=D_{deal_id}&"
+                    f"fields[DEADLINE]={deadline}"
+                )
+                logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
+
             logging.info(f"Обновлена текущая сделка {deal_id} как итоговая.")
             title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
             # Создание копии обрабатываемой сделки
@@ -458,13 +621,18 @@ async def process_contact_update(contact_info):
         weight = contact_info.get('UF_CRM_1726207792191')
         amount = contact_info.get('UF_CRM_1726207809637')
         number_of_orders = contact_info.get('UF_CRM_1730182877')
-
+        locations = {
+            'pv_astana_1': "г.Астана, ПВ №1",
+            'pv_astana_2': "г.Астана, ПВ №2",
+            'pv_karaganda_1': "г.Караганда, ПВ №1"
+        }
+        location = locations.get(client_data['pickup_point'])
         # Отправляем уведомление только если поле amount заполнено и не равно нулю
         if amount and amount != '0':
             try:
                 await bot.send_message(
                     chat_id=chat_id,
-                    text=f"Посылки поступили в пункт выдачи {client_data['pickup_point']} \n"
+                    text=f"Посылки поступили в пункт выдачи {location} \n"
                          f"⚖ Вес заказов: {weight} кг.\n"
                          f"💰 Сумма оплаты по весу: {amount} тг.\n"
                          f"📦 Количество заказов к выдаче: {number_of_orders}"
