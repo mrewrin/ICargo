@@ -123,6 +123,27 @@ def init_db():
         )
     """)
 
+    # Таблица для сохранения информации о рассылке
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS broadcast_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id INTEGER NOT NULL,
+        message_id INTEGER NOT NULL,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS deal_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        deal_id INTEGER NOT NULL,          -- ID сделки в Bitrix
+        track_number TEXT NOT NULL UNIQUE, -- Трек-номер
+        original_date_modify TEXT,         -- Оригинальная дата изменения
+        stage_id TEXT,                     -- Этап сделки
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP -- Время сохранения записи
+    )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -161,14 +182,49 @@ def is_vip_code_available(code):
     return result is not None
 
 
-def update_personal_code(old_code, new_code):
+def is_code_used_by_another_client(new_code):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
-    cursor.execute("UPDATE clients SET personal_code = ? WHERE personal_code = ?", (new_code, old_code))
-    updated = cursor.rowcount > 0
-    conn.commit()
+
+    cursor.execute("""
+        SELECT 1 FROM clients WHERE personal_code = ?
+    """, (new_code,))
+    result = cursor.fetchone()
     conn.close()
-    return updated
+
+    return result is not None
+
+
+def update_personal_code(old_code, new_code):
+    """
+    Обновляет персональный код в таблицах `clients` и `tracked_deals`.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    try:
+        # Обновляем персональный код в таблице `clients`
+        cursor.execute("UPDATE clients SET personal_code = ? WHERE personal_code = ?", (new_code, old_code))
+        updated_clients = cursor.rowcount > 0
+
+        # Обновляем персональный код в таблице `tracked_deals`
+        cursor.execute("UPDATE tracked_deals SET personal_code = ? WHERE personal_code = ?", (new_code, old_code))
+        updated_tracked_deals = cursor.rowcount > 0
+
+        # Проверяем, были ли изменения в обеих таблицах
+        if updated_clients or updated_tracked_deals:
+            conn.commit()
+            logging.info(f"Персональный код обновлен с {old_code} на {new_code} в таблицах.")
+            return True
+        else:
+            logging.warning(f"Персональный код {old_code} не найден в таблицах для обновления.")
+            return False
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка при обновлении персонального кода: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
 
 
 def remove_vip_code(code):
@@ -192,6 +248,25 @@ def get_name_track_by_track_number(track_number):
     except Exception as e:
         logging.error(f"Ошибка при извлечении name_track для трек-номера {track_number}: {e}")
         return None
+    finally:
+        conn.close()
+
+
+def update_name_track_by_track_number(track_number, new_name):
+    """
+    Обновляет name_track для track_number в таблице track_numbers.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE track_numbers SET name_track = ? WHERE track_number = ?",
+            (new_name, track_number)
+        )
+        conn.commit()  # Фиксируем изменения в базе
+        logging.info(f"Название для трек-номера {track_number} успешно обновлено на '{new_name}'.")
+    except Exception as e:
+        logging.error(f"Ошибка при обновлении name_track для трек-номера {track_number}: {e}")
     finally:
         conn.close()
 
@@ -289,6 +364,21 @@ def get_client_by_contact_id(contact_id):
     return None
 
 
+def get_chat_id_by_phone(phone):
+    """
+    Проверяет, зарегистрирован ли пользователь с данным номером телефона.
+    Возвращает chat_id, если пользователь найден.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT chat_id FROM clients WHERE phone = ?", (phone,))
+    result = cursor.fetchone()
+    conn.close()
+
+    return result[0] if result else None
+
+
 def check_chat_id_exists(chat_id):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -330,6 +420,23 @@ def get_personal_code_by_chat_id(chat_id):
         return result[0]  # Возвращаем personal_code
     else:
         return None  # Если personal_code не найден
+
+
+def get_chat_id_by_personal_code(personal_code):
+    """
+    Получает chat_id по указанному personal_code из таблицы clients.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT chat_id FROM clients WHERE personal_code = ?', (personal_code,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        return result[0]  # Возвращаем chat_id
+    else:
+        return None  # Если chat_id не найден
 
 
 def get_contact_id_by_code(code):
@@ -392,6 +499,43 @@ def update_track_number(track_number, name_track, chat_id):
     conn.close()
 
 
+def update_track_number_in_all_tables(old_track_number, new_track_number, chat_id):
+    """
+    Обновляет трек-номер в таблицах track_numbers и tracked_deals.
+    :param old_track_number: Старый трек-номер, который нужно заменить.
+    :param new_track_number: Новый трек-номер, на который нужно заменить.
+    :param chat_id: ID чата пользователя.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    logging.info(f"Обновление трек-номера {old_track_number} на {new_track_number} для пользователя {chat_id}")
+
+    try:
+        # Обновляем трек-номер в таблице track_numbers
+        cursor.execute('''
+            UPDATE track_numbers
+            SET track_number = ?
+            WHERE track_number = ? AND chat_id = ?
+        ''', (new_track_number, old_track_number, chat_id))
+
+        # Обновляем трек-номер в таблице tracked_deals
+        cursor.execute('''
+            UPDATE tracked_deals
+            SET track_number = ?
+            WHERE track_number = ? AND chat_id = ?
+        ''', (new_track_number, old_track_number, chat_id))
+
+        conn.commit()
+        logging.info(f"Трек-номер {old_track_number} успешно обновлен на {new_track_number} в таблицах track_numbers и tracked_deals.")
+        return True
+    except Exception as e:
+        logging.error(f"Ошибка при обновлении трек-номера {old_track_number} на {new_track_number}: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
 def get_track_data_by_track_number(track_number):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
@@ -426,6 +570,27 @@ def get_track_numbers_by_chat_id(chat_id):
     conn.close()
 
     return rows
+
+
+def get_track_from_db(track_number):
+    """
+    Проверяет наличие трек-номера в базе данных.
+    Возвращает True, если трек-номер существует, иначе False.
+    """
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    # Поиск трек-номера в таблице track_numbers
+    cursor.execute('SELECT 1 FROM track_numbers WHERE track_number = ?', (track_number,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        logging.info(f"Трек-номер {track_number} найден в базе данных.")
+        return True  # Трек-номер существует
+    else:
+        logging.info(f"Трек-номер {track_number} не найден в базе данных.")
+        return False  # Трек-номер отсутствует
 
 
 def get_all_track_numbers():
@@ -858,3 +1023,54 @@ def delete_task_from_db(deal_id):
     conn.commit()
     conn.close()
     logging.info(f"Удалена запись из базы данных для сделки deal_id {deal_id}.")
+
+
+def save_broadcast_message(chat_id, message_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO broadcast_messages (chat_id, message_id)
+    VALUES (?, ?)
+    """, (chat_id, message_id))
+
+    conn.commit()
+    conn.close()
+
+
+def get_last_broadcast_messages():
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT chat_id, message_id FROM broadcast_messages
+    ORDER BY id DESC
+    """)
+    messages = cursor.fetchall()
+    conn.close()
+    return messages
+
+
+def save_deal_history(deal_id, track_number, original_date_modify, stage_id):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO deal_history (deal_id, track_number, original_date_modify, stage_id)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(track_number) DO UPDATE SET
+            original_date_modify = excluded.original_date_modify,
+            stage_id = excluded.stage_id
+    """, (deal_id, track_number, original_date_modify, stage_id))
+    conn.commit()
+    conn.close()
+
+
+def get_original_date_by_track(track_number):
+    conn = sqlite3.connect('clients.db')
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT original_date_modify, stage_id FROM deal_history WHERE track_number = ?
+    """, (track_number,))
+    result = cursor.fetchone()
+    conn.close()
+    return result

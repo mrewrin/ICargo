@@ -25,10 +25,11 @@ class Menu(StatesGroup):
 
 class Track(StatesGroup):
     # Состояния ввода трек номера
-    add_track = State()             # Состояние для обработки кнопки "Добавить трек номер"
+    add_track = State()             # Состояние для обработки кнопки "Добавить трек-номер"
     track_number = State()          # Состояние для ввода трек-номера
     track_name = State()            # Состояние для ввода названия трек-номера
     track_name_update = State()     # Состояние для обновления названия трек-номера
+    track_number_update = State()   # Состояние для редактирования трек-номера
 
 
 class Package(StatesGroup):

@@ -2,7 +2,7 @@ import logging
 from aiogram import Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-from db_management import update_client_data, get_client_by_chat_id
+from db_management import update_client_data, get_client_by_chat_id, get_chat_id_by_phone
 from handlers.menu_handling import show_inline_menu
 from functions import transliterate, format_phone, validate_phone, generate_address_instructions
 from keyboards import create_inline_main_menu, create_city_keyboard, create_pickup_keyboard, create_menu_button
@@ -34,7 +34,7 @@ async def process_update_name(message: Message, state: FSMContext):
     await state.update_data(chat_id=chat_id)
     await send_and_delete_previous(
         message,
-        "Напишите Ваш номер телефона в формате +7xxxxxxxxxx",
+        "Напишите Ваш номер телефона в формате 8xxxxxxxxxx",
         reply_markup=create_menu_button(),
         state=state
     )
@@ -50,6 +50,18 @@ async def process_update_phone(message: Message, state: FSMContext):
 
     phone = format_phone(message.text)
     if validate_phone(phone):
+        # Проверяем, существует ли пользователь с таким номером телефона
+        existing_chat_id = get_chat_id_by_phone(phone)
+        if existing_chat_id and existing_chat_id != message.chat.id:
+            await send_and_delete_previous(
+                message,
+                "Пользователь с этим номером телефона уже зарегистрирован в системе. "
+                "Если вы хотите обновить данные, используйте команду /start.",
+                state=state
+            )
+            return
+
+        # Если номер телефона уникален или принадлежит текущему пользователю, обновляем данные
         await state.update_data(phone=phone)
         await send_and_delete_previous(
             message,
@@ -62,7 +74,7 @@ async def process_update_phone(message: Message, state: FSMContext):
     else:
         await send_and_delete_previous(
             message,
-            "Пожалуйста, укажите корректный номер телефона в формате +7xxxxxxxxxx",
+            "Пожалуйста, укажите корректный номер телефона в формате 8xxxxxxxxxx",
             state=state
         )
 
@@ -128,7 +140,7 @@ async def process_update_pickup(callback: CallbackQuery, state: FSMContext):
     )
 
     # Отправка сообщения
-    sent_message = await callback.message.answer(instruction_message, reply_markup=create_inline_main_menu())
+    sent_message = await callback.message.answer(instruction_message, reply_markup=create_inline_main_menu(), parse_mode="MarkdownV2")
 
     try:
         # Обновление закрепленного сообщения

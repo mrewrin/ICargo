@@ -3,6 +3,7 @@ import logging
 import httpx
 from datetime import datetime
 from config import webhook_url, bitrix
+from db_management import find_deal_by_track
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
@@ -53,6 +54,34 @@ def get_deals_by_track(track_number):
     else:
         print(f"Ошибка при получении сделок: {response.status_code}")
         print(f"Ответ сервера: {response.text}")
+        return []
+
+
+def get_deals_by_track_ident(track_number):
+    """
+    Получает список сделок по значению пользовательского поля UF_CRM_1723542556619.
+    Возвращает список сделок, у которых трек-номер полностью совпадает с указанным значением.
+    """
+    url = webhook_url + 'crm.deal.list'
+
+    params_deal = {
+        'filter': {
+            'UF_CRM_1723542556619': track_number  # Ищем по трек-номеру
+        },
+        'select': ['ID', 'STAGE_ID', 'DATE_MODIFY', 'UF_CRM_1723542556619', 'CONTACT_ID']  # Выбираем только нужные поля
+    }
+
+    response = requests.post(url, json={'filter': params_deal['filter'], 'select': params_deal['select']})
+
+    if response.status_code == 200:
+        deals = response.json().get('result', [])
+        # Фильтруем результаты на стороне Python для точного совпадения
+        filtered_deals = [deal for deal in deals if deal.get('UF_CRM_1723542556619') == track_number]
+        logging.info(filtered_deals)
+        return filtered_deals
+    else:
+        logging.error(f"Ошибка при получении сделок: {response.status_code}")
+        logging.error(f"Ответ сервера: {response.text}")
         return []
 
 
@@ -405,9 +434,13 @@ async def update_contact_fields_in_bitrix(contact_id, sum_weight, sum_amount, or
 
 
 def update_contact_code_in_bitrix(contact_id, new_code):
+    """
+    Обновляет персональный код в Битриксе как `NAME` и как пользовательское поле.
+    """
     url = webhook_url + 'crm.contact.update'
     fields = {
-        'UF_CRM_1726123664764': new_code
+        'UF_CRM_1726123664764': new_code,  # Обновляем пользовательское поле
+        'NAME': new_code  # Обновляем имя контакта
     }
     params_contact = {
         'id': contact_id,
@@ -416,18 +449,25 @@ def update_contact_code_in_bitrix(contact_id, new_code):
 
     logging.info(f"Обновление контакта в Битрикс. ID: {contact_id}, Новый код: {new_code}")
 
-    # Отправляем запрос на обновление данных
-    response = requests.post(url, json=params_contact)
+    try:
+        # Отправляем запрос на обновление данных
+        response = requests.post(url, json=params_contact)
 
-    if response.status_code == 200:
-        result = response.json().get('result')
-        if result:
-            logging.info(f"Контакт с ID {contact_id} успешно обновлен в Битрикс.")
+        if response.status_code == 200:
+            result = response.json().get('result')
+            if result:
+                logging.info(f"Контакт с ID {contact_id} успешно обновлен в Битрикс.")
+                return True
+            else:
+                error_desc = response.json().get('error_description', 'Неизвестная ошибка')
+                logging.error(f"Ошибка при обновлении контакта в Битрикс: {error_desc}")
         else:
-            logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.json().get('error_description')}")
-    else:
-        logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.status_code}")
-        logging.error(f"Ответ сервера: {response.text}")
+            logging.error(f"Ошибка при обновлении контакта в Битрикс: {response.status_code}")
+            logging.error(f"Ответ сервера: {response.text}")
+    except requests.RequestException as e:
+        logging.error(f"Сетевая ошибка при обновлении контакта в Битрикс: {e}")
+
+    return False
 
 
 # Создание и обновление сделок
@@ -469,7 +509,7 @@ def create_deal(contact_id, personal_code, track_number, pickup_point, phone, ch
         return None
 
 
-def update_deal_contact(deal_id, contact_id, personal_code, chat_id, phone, city, pickup_point):
+def update_deal_contact(deal_id, contact_id, personal_code, name_translit, chat_id, phone, city, pickup_point):
     """
     Обновляет контакт и дополнительные поля для существующей сделки в Битрикс.
     Возвращает результат обновления (True или False).
@@ -491,7 +531,7 @@ def update_deal_contact(deal_id, contact_id, personal_code, chat_id, phone, city
             'ID': deal_id,
             'fields': {
                 'CONTACT_ID': contact_id,
-                'TITLE': f'{personal_code} {pickup_point} {phone}',  # Обновляем имя и пункт выдачи в названии сделки
+                'TITLE': f'{personal_code} {name_translit} {pickup_point} {phone}',  # Обновляем имя и пункт выдачи в названии сделки
                 'UF_CRM_1723542922949': f'{pickup_code}',  # Поле с кодом пункта выдачи
                 'UF_CRM_1725179625': chat_id,  # Поле для номера телефона (например)
                 'UF_CRM_CITY_FIELD': city  # Пример поля для города (уточните правильный ID)
@@ -515,7 +555,39 @@ def update_deal_contact(deal_id, contact_id, personal_code, chat_id, phone, city
         return False
 
 
-def create_deal_with_stage(contact_id, track_number, personal_code, pickup_point, chat_id, phone, pipeline_stage, category_id):
+def update_tracked_deal_in_bitrix(old_track_number, new_track_number):
+    """
+    Обновляет трек-номер в сделке Bitrix.
+    """
+    deals = get_deals_by_track(old_track_number)  # Используем get_deals_by_track вместо find_deal_by_track_number
+    if deals:
+        deal = deals[0]  # Берем первую найденную сделку
+        deal_id = deal['ID']
+        url = webhook_url + 'crm.deal.update'
+        params = {
+            'id': deal_id,
+            'fields': {
+                'UF_CRM_1723542556619': new_track_number  # Поле для трек-номера
+            }
+        }
+
+        response = requests.post(url, json=params)
+
+        if response.status_code == 200 and response.json().get('result'):
+            logging.info(f"Трек-номер сделки ID {deal_id} успешно обновлен на {new_track_number}.")
+            # Проверяем, применилось ли обновление
+            updated_deal = get_deals_by_track(new_track_number)
+            if updated_deal:
+                logging.info(f"Подтверждено: сделка ID {deal_id} теперь имеет трек-номер {new_track_number}.")
+            else:
+                logging.warning(f"Не удалось подтвердить обновление трек-номера в Bitrix для сделки ID {deal_id}.")
+        else:
+            logging.error(f"Ошибка при обновлении трек-номера в Bitrix: {response.text}")
+    else:
+        logging.warning(f"Сделка с трек-номером {old_track_number} не найдена в Bitrix.")
+
+
+def create_deal_with_stage(contact_id, track_number, personal_code, name_translit, pickup_point, chat_id, phone, pipeline_stage, category_id):
     """
     Создает сделку для данного контакта на определенном этапе и с указанием категории.
     """
@@ -537,7 +609,7 @@ def create_deal_with_stage(contact_id, track_number, personal_code, pickup_point
     url = f"{webhook_url}/crm.deal.add"
     data = {
         'fields': {
-            'TITLE': f'{personal_code} {pickup_point} {phone}',
+            'TITLE': f'{personal_code} {name_translit} {pickup_point} {phone}',
             'CONTACT_ID': contact_id,
             'STAGE_ID': pipeline_stage,
             'CATEGORY_ID': category_id,
@@ -879,6 +951,7 @@ def delete_deal(deal_id):
 #         archive_stage_id = pipeline_stage.get('archive', 'LOSE')  # Используем этап "Архив" из маппинга или 'LOSE' по умолчанию
 #         update_deal_stage(deal_id, archive_stage_id)
 #         logging.info(f"Сделка с ID {deal_id} перемещена в архив.")
+
 
 def archive_deal(deal_id, pipeline_stage):
     """

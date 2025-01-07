@@ -4,7 +4,7 @@ from aiogram import Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
-from db_management import save_client_data, check_chat_id_exists, generate_unique_code
+from db_management import save_client_data, check_chat_id_exists, generate_unique_code, get_chat_id_by_phone
 from handlers.menu_handling import show_inline_menu
 from functions import transliterate, format_phone, validate_phone, generate_address_instructions
 from keyboards import create_inline_main_menu, create_city_keyboard, create_pickup_keyboard, create_yes_no_keyboard
@@ -53,6 +53,7 @@ async def send_welcome(message: Message, state: FSMContext):
 
 @router.message(Reg.name)
 async def process_name(message: Message, state: FSMContext):
+    await send_and_delete_previous(message, "Обрабатываем введенное имя...", state=state)  # Уточняем пользователю процесс
     if message.text.replace(' ', '').isalpha():
         await state.update_data(name_cyrillic=message.text.title())
         translit_name = transliterate(message.text)
@@ -62,7 +63,7 @@ async def process_name(message: Message, state: FSMContext):
         logging.info(f"Пользователь ввел имя: {message.text}, translit: {translit_name}")
         await send_and_delete_previous(
             message,
-            "Напишите Ваш номер телефона в формате +7xxxxxxxxxx",
+            "Напишите Ваш номер телефона в формате 8xxxxxxxxxx",
             state=state
         )
         await state.set_state(Reg.phone)
@@ -76,6 +77,7 @@ async def process_name(message: Message, state: FSMContext):
 
 @router.message(Reg.phone)
 async def process_phone(message: Message, state: FSMContext):
+    await send_and_delete_previous(message, "Проверяем введенный номер телефона...", state=state)  # Информируем
     logging.info(f"Текущее состояние: {await state.get_state()}")
 
     if message.text == "📋 Меню":
@@ -84,6 +86,18 @@ async def process_phone(message: Message, state: FSMContext):
 
     phone = format_phone(message.text)
     if validate_phone(phone):
+        # Проверяем, существует ли пользователь с таким номером телефона
+        existing_chat_id = get_chat_id_by_phone(phone)
+        if existing_chat_id and existing_chat_id != message.chat.id:
+            await send_and_delete_previous(
+                message,
+                "Пользователь с этим номером телефона уже зарегистрирован в системе. "
+                "Если вы хотите обновить данные, используйте команду /start.",
+                state=state
+            )
+            return
+
+        # Если номер телефона уникален, продолжаем процесс регистрации
         await state.update_data(phone=phone)
         await send_and_delete_previous(
             message,
@@ -95,13 +109,14 @@ async def process_phone(message: Message, state: FSMContext):
     else:
         await send_and_delete_previous(
             message,
-            "Пожалуйста, укажите корректный номер телефона в формате +7xxxxxxxxxx",
+            "Пожалуйста, укажите корректный номер телефона в формате 8xxxxxxxxxx",
             state=state
         )
 
 
 @router.callback_query(Reg.city)
 async def process_city(callback: CallbackQuery, state: FSMContext):
+    await send_and_delete_previous(callback.message, "Обрабатываем выбор города...", state=state)  # Информируем
     if callback.data == "main_menu":
         await show_inline_menu(callback.message, state)
         return
@@ -119,6 +134,7 @@ async def process_city(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(Reg.pickup_point)
 async def process_pickup(callback: CallbackQuery, state: FSMContext):
+    await send_and_delete_previous(callback.message, "Сохраняем данные о пункте выдачи...", state=state)  # Информируем
     if callback.data == "main_menu":
         await show_inline_menu(callback.message, state)
         return
@@ -155,7 +171,7 @@ async def process_pickup(callback: CallbackQuery, state: FSMContext):
             name_translit=name_translit,
             pickup_point_code=pickup_point
         )
-        sent_message = await callback.message.answer(instruction_message, reply_markup=create_inline_main_menu())
+        sent_message = await callback.message.answer(instruction_message, reply_markup=create_inline_main_menu(), parse_mode="MarkdownV2")
         try:
             await callback.message.bot.pin_chat_message(chat_id=callback.message.chat.id, message_id=sent_message.message_id)
             await state.clear()

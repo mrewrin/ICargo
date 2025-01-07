@@ -4,7 +4,9 @@ from bot_instance import bot
 from db_management import get_personal_code_by_chat_id, get_track_data_by_track_number, get_client_by_chat_id, \
     get_client_by_contact_id, delete_deal_by_track_number, get_chat_id_by_contact_id, save_final_deal_to_db, \
     update_final_deal_in_db, get_final_deal_from_db, get_name_track_by_track_number, find_deal_by_track, \
-    update_tracked_deal, get_task_id_by_deal_id, delete_task_from_db
+    update_tracked_deal, get_task_id_by_deal_id, delete_task_from_db, get_original_date_by_track, save_deal_history, \
+    update_name_track_by_track_number
+from bitrix_integration import update_contact_fields_in_bitrix
 
 
 # Определение маппинга стадий для каждой воронки
@@ -40,14 +42,14 @@ async def send_notification_if_required(deal_info, chat_id, track_number, pickup
 
     # Определяем соответствующие пункты выдачи и стадии для уведомления
     locations = {
-        'pv_astana_1': "г.Астана, ПВ №1",
-        'pv_astana_2': "г.Астана, ПВ №2",
+        'pv_astana_1': "г.Астана, ПВ Астана ESIL",
+        'pv_astana_2': "г.Астана, ПВ Астана SARY-ARKA",
         'pv_karaganda_1': "г.Караганда, ПВ №1"
     }
     status_code_list = {
         "C4:NEW": "г.Караганда, ПВ №1",
-        "C6:NEW": "г.Астана, ПВ №1",
-        "C2:NEW": "г.Астана, ПВ №2"
+        "C6:NEW": "г.Астана, ПВ Астана ESIL",
+        "C2:NEW": "г.Астана, ПВ Астана SARY-ARKA"
     }
     location_value = locations.get(pickup_point, "неизвестное место выдачи")
     stage_value = status_code_list.get(stage_id)
@@ -61,8 +63,6 @@ async def send_notification_if_required(deal_info, chat_id, track_number, pickup
     if location_value == stage_value and chat_id:
         try:
             message_text = f"Ваш заказ {name_track or ''} с трек номером {track_number} прибыл в пункт выдачи {location_value}."
-            if personal_code:
-                message_text += f"\nВаш личный код: {personal_code}."
             await bot.send_message(chat_id=chat_id, text=message_text)
             logging.info(f"Уведомление отправлено пользователю с chat_id: {chat_id}")
         except Exception as e:
@@ -89,6 +89,7 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
     # Этап и категория
     stage_id = deal_info.get('STAGE_ID')
     category_id = deal_info.get('CATEGORY_ID')
+    date_modify = deal_info.get('DATE_MODIFY')
     awaiting_pickup_stages = {v['awaiting_pickup'] for v in stage_mapping.values()}
 
     # Пропускаем обработку, если сделка уже на этапе 'awaiting_pickup'
@@ -101,6 +102,32 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
     weight = deal_info.get('UF_CRM_1727870320443', 0)
     amount = deal_info.get('OPPORTUNITY', 0)
     number_of_orders = deal_info.get('UF_CRM_1730185262', 0)
+
+    # Получаем текущую запись из deal_history
+    deal_history = get_original_date_by_track(track_number)
+    if deal_history:
+        last_modified, saved_stage_id = deal_history
+
+        # Если этап изменился, обновляем `deal_history`
+        if saved_stage_id != stage_id:
+            logging.info(f"Этап сделки изменился: {saved_stage_id} -> {stage_id}. Обновляем запись в deal_history.")
+            save_deal_history(
+                deal_id=deal_id,
+                track_number=track_number,
+                original_date_modify=date_modify,  # Сохраняем новое значение DATE_MODIFY
+                stage_id=stage_id  # Сохраняем новый этап
+            )
+        else:
+            logging.info(f"Этап сделки не изменился. Обновление deal_history не требуется.")
+    else:
+        # Если записи в deal_history нет, создаём новую
+        logging.info(f"Запись в deal_history отсутствует. Создаём новую запись.")
+        save_deal_history(
+            deal_id=deal_id,
+            track_number=track_number,
+            original_date_modify=date_modify,
+            stage_id=stage_id
+        )
 
     # Логика для альтернативной категории 8
     if int(category_id) == 8 and track_number:
@@ -127,7 +154,7 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                     operations[f"delete_old_deal_{old_deal_id['ID']}"] = f"crm.deal.delete?id={old_deal_id['ID']}"
 
                 # Обновление текущей сделки
-                title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+                title = f"{client_info['personal_code']} {client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
                 pickup_mapping = {
                     "pv_karaganda_1": "52",
                     "pv_karaganda_2": "54",
@@ -291,7 +318,7 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                     ] = f"crm.deal.contact.items.delete?ID={deal_id}&CONTACT_ID={contact_id}"
                     contact_id = expected_contact_id
                     logging.info(f"Контакт успешно перепривязан к ID {contact_id}.")
-                title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+                title = f"{client_info['personal_code']} {client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
                 logging.info(f"Обновление сделки ID {deal_id}: новый заголовок: {title}")
                 operations[f"update_deal_{deal_id}"] = (
                     f"crm.deal.update?ID={deal_id}&fields[CONTACT_ID]={contact_id}&fields[TITLE]={title}"
@@ -306,12 +333,30 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
             else:
                 logging.warning(f"Клиент с chat_id {chat_id} не найден.")
         else:
-            logging.info(f"Трек-номер {track_number} не зарегистрирован в базе бота. Добавляем в список для обработки.")
+            logging.info(
+                f"Трек-номер {track_number} не зарегистрирован в базе бота. Добавляем в список для обработки.")
             unregistered_deals.append({
                 'ID': deal_id,
                 'track_number': track_number,
                 'STAGE_ID': stage_id  # Добавляем этап сделки
             })
+
+            # Получение chat_id и данных клиента
+            chat_id = get_chat_id_by_contact_id(contact_id)
+            if not chat_id:
+                logging.error(f"chat_id не найден для contact_id {contact_id}. Уведомление невозможно отправить.")
+                return
+
+            client_info = get_client_by_chat_id(chat_id)
+            if not client_info:
+                logging.error(
+                    f"Клиентская информация не найдена для chat_id {chat_id}. Уведомление невозможно отправить.")
+                return
+
+            try:
+                await send_notification_if_required(deal_info, chat_id, track_number, client_info['pickup_point'])
+            except Exception as e:
+                logging.error(f"Ошибка при отправке уведомления для track_number {track_number}: {e}")
 
         if not client_info and contact_id:
             logging.info(f"Попытка получения данных клиента по contact_id {contact_id}")
@@ -370,7 +415,7 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                 operations[f"archive_deal_{deal_id}"] = (
                     f"crm.deal.update?id={deal_id}"
                     f"&fields[TITLE]={client_info['personal_code']} "
-                    f"{client_info['pickup_point']} {client_info['phone']}"
+                    f"{client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
                     f"&fields[STAGE_ID]={archive_stage_id}"
                     f"&fields[UF_CRM_1727870320443]=0"
                     f"&fields[OPPORTUNITY]=0"
@@ -400,18 +445,29 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                     # Обновляем текущую сделку как итоговую
                     operations[f"update_deal_as_final_{deal_id}"] = (
                         f"crm.deal.update?ID={deal_id}&fields[TITLE]=Итоговая сделка: {client_info['personal_code']} "
-                        f"{client_info['pickup_point']} {client_info['phone']}&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
+                        f"{client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
+                        f"&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
                         f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
                         f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}&fields[UF_CRM_1730185262]={number_of_orders}"
                         f"&fields[UF_CRM_1729115312]={track_number}&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
                     )
                     logging.info(f"Обновление текущей сделки как итоговой добавлено в операции: {deal_id}.")
 
+                    if f"update_contact_fields_{contact_id}" not in operations:
+                        operations[f"update_contact_fields_{contact_id}"] = (
+                            f"crm.contact.update?id={contact_id}&fields[UF_CRM_1726207792191]={weight}"
+                            f"&fields[UF_CRM_1726207809637]={amount}&fields[UF_CRM_1730182877]={number_of_orders}"
+                        )
+                        logging.info(f"Добавлена операция обновления данных контакта {contact_id}.")
+                    else:
+                        logging.info(f"Операция обновления данных контакта {contact_id} уже существует.")
+
+                    update_name_track_by_track_number(track_number, "Прибывшие посылки")
                     # Создаём копию текущей сделки в архивном этапе
                     archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
                     operations[f"create_copy_of_deal_{contact_id}"] = (
                         f"crm.deal.add?"
-                        f"fields[TITLE]={client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}&"
+                        f"fields[TITLE]={client_info['personal_code']} {client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}&"
                         f"fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={archive_stage_id}&"
                         f"fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}&"
                         f"fields[UF_CRM_1727870320443]=0&fields[OPPORTUNITY]=0&"
@@ -486,7 +542,7 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
             # Обновляем текущую сделку как итоговую
             operations[f"update_deal_as_final_{deal_id}"] = (
                 f"crm.deal.update?ID={deal_id}&fields[TITLE]=Итоговая сделка: {client_info['personal_code']} "
-                f"{client_info['pickup_point']} {client_info['phone']}&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
+                f"{client_info['name_translit']} {client_info['pickup_point']} {client_info['phone']}&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
                 f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
                 f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}&fields[UF_CRM_1730185262]={number_of_orders}"
                 f"&fields[UF_CRM_1729115312]={track_number}&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
@@ -517,7 +573,7 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                 task_description = (
                     f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
                     f"Ожидалась стадия: {exp_stage}, текущая стадия: {stage_id}. "
-                    f"Контакт: {client_info['phone']}."
+                    f"Контакт: +{client_info['phone']}."
                 )
                 deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
 
@@ -534,13 +590,13 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
                 logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
 
             logging.info(f"Обновлена текущая сделка {deal_id} как итоговая.")
-            title = f"{client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+            title = f"{client_info['personal_code']} {client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
             # Создание копии обрабатываемой сделки
             archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
             operations[f"create_final_deal_{contact_id}"] = (
                 f"crm.deal.add?"
                 f"fields[TITLE]={client_info['personal_code']} "
-                f"{client_info['pickup_point']} {client_info['phone']}"
+                f"{client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
                 f"&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={archive_stage_id}"
                 f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
                 f"&fields[UF_CRM_1727870320443]=0&fields[OPPORTUNITY]=0"
@@ -604,6 +660,7 @@ async def process_contact_update(contact_info):
     # Извлекаем данные для сравнения
     name_translit_db = client_data['name_translit']
     phone_db = client_data['phone']
+    personal_code = client_data['personal_code']
 
     # Данные контакта из CRM
     name_translit_crm = contact_info.get('UF_CRM_1730093824027')
@@ -622,8 +679,8 @@ async def process_contact_update(contact_info):
         amount = contact_info.get('UF_CRM_1726207809637')
         number_of_orders = contact_info.get('UF_CRM_1730182877')
         locations = {
-            'pv_astana_1': "г.Астана, ПВ №1",
-            'pv_astana_2': "г.Астана, ПВ №2",
+            'pv_astana_1': "г.Астана, ПВ Астана ESIL",
+            'pv_astana_2': "г.Астана, ПВ Астана SARY-ARKA",
             'pv_karaganda_1': "г.Караганда, ПВ №1"
         }
         location = locations.get(client_data['pickup_point'])
@@ -635,9 +692,14 @@ async def process_contact_update(contact_info):
                     text=f"Посылки поступили в пункт выдачи {location} \n"
                          f"⚖ Вес заказов: {weight} кг.\n"
                          f"💰 Сумма оплаты по весу: {amount} тг.\n"
-                         f"📦 Количество заказов к выдаче: {number_of_orders}"
+                         f"📦 Количество заказов к выдаче: {number_of_orders}.\n"
+                         f"Ваш личный код: {personal_code}."
                 )
                 logging.info(f"Уведомление с весом и суммой отправлено пользователю с chat_id: {chat_id}")
+                # Очищаем пользовательские поля контакта, устанавливая значения в 0
+                await update_contact_fields_in_bitrix(contact_id, sum_weight=0, sum_amount=0, order_count=0)
+                logging.info(f"Пользовательские поля контакта с ID {contact_id} успешно очищены.")
+
             except Exception as e:
                 logging.error(f"Ошибка при отправке сообщения пользователю с chat_id: {chat_id}. Ошибка: {e}")
         else:

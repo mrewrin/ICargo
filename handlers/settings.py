@@ -7,7 +7,6 @@ from keyboards import create_settings_keyboard, create_contact_keyboard, create_
 from states import Upd
 from handlers.utils import send_and_delete_previous
 
-
 router = Router()
 
 
@@ -19,8 +18,7 @@ def register_settings_handlers(router_object):
 
 @router.callback_query(F.data.in_({"settings"}))
 async def call_settings(callback: CallbackQuery, state: FSMContext):
-    await callback.message.delete()
-    await callback.message.answer("⚙️ Настройки:", reply_markup=create_settings_keyboard())
+    await send_and_delete_previous(callback.message, "⚙️ Настройки:", reply_markup=create_settings_keyboard(), state=state)
 
 
 @router.callback_query(F.data == "show_contact_info")
@@ -39,7 +37,7 @@ async def show_contact_info(callback: CallbackQuery, state: FSMContext):
     pickup_points = {
         "pv_karaganda_1": "Пункт выдачи Караганда 1",
         "pv_karaganda_2": "Пункт выдачи Караганда 2",
-        "pv_astana_1": "Пункт выдачи Астана 1",
+        "pv_astana_1": "Пункт выдачи Астана ESIL",
         "pv_astana_2": "Пункт выдачи Астана 2"
     }
     pickup_point = pickup_points.get(pickup_point)
@@ -50,7 +48,7 @@ async def show_contact_info(callback: CallbackQuery, state: FSMContext):
         f"Город: {city}\n"
         f"Пункт выдачи: {pickup_point}\n"
     )
-    await callback.message.answer(contact_info_message, reply_markup=create_contact_keyboard())
+    await send_and_delete_previous(callback.message, contact_info_message, reply_markup=create_contact_keyboard(), state=state)
 
 
 @router.callback_query(F.data == "edit_contact_info")
