@@ -1,0 +1,2 @@
+# ICargoBot
+This repository contains a Telegram bot built using Aiogram and FastAPI, designed for ICargo. It features bidirectional integration and synchronization with Bitrix24, developed as part of a commercial project.
