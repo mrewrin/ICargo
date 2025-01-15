@@ -1074,3 +1074,24 @@ def get_original_date_by_track(track_number):
     result = cursor.fetchone()
     conn.close()
     return result
+
+
+def delete_client_from_db(phone):
+    """
+    Удаляет клиента из таблицы `clients` по номеру телефона.
+    """
+    try:
+        conn = sqlite3.connect('clients.db')
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM clients WHERE phone = ?", (phone,))
+        deleted_rows = cursor.rowcount
+        conn.commit()
+        conn.close()
+        if deleted_rows > 0:
+            logging.info(f"Удалена запись из базы данных для телефона {phone}.")
+        else:
+            logging.warning(f"Запись с телефоном {phone} не найдена в базе данных.")
+        return deleted_rows > 0
+    except Exception as e:
+        logging.error(f"Ошибка при удалении записи с телефоном {phone}: {e}")
+        return False
