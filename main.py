@@ -12,7 +12,8 @@ from handlers import user_registration, user_update, menu_handling, track_manage
 from batch_processing import batch_send_to_bitrix
 from db_management import init_db, get_all_chat_ids, is_vip_code_available, update_personal_code, \
     remove_vip_code, get_contact_id_by_code, save_webhook_to_db, save_broadcast_message, get_last_broadcast_messages, \
-    get_unprocessed_webhooks, is_code_used_by_another_client, get_chat_id_by_personal_code, delete_deal_by_track_number
+    get_unprocessed_webhooks, is_code_used_by_another_client, get_chat_id_by_personal_code, \
+    delete_deal_by_track_number, delete_client_from_db
 from bitrix_integration import update_contact_code_in_bitrix, get_deal_info, get_deals_by_track_ident, delete_deal
 from aiogram.filters import Command
 from aiogram.types import Message, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
@@ -63,6 +64,8 @@ async def set_bot_commands():
         BotCommand(command="/delete_track", description="Удалить сделку или трек-номер из базы и Битрикс "
                                                         "(ввести /delete_track deal {deal_id} "
                                                         "или /delete_track number {track_number})"),
+        BotCommand(command="/delete_client", description="Удалить клиента по номеру телефона "
+                                                         "(ввести /delete_client {номер_телефона})"),
         ]
     for admin_id in ADMIN_IDS:
         await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))
@@ -329,6 +332,38 @@ async def delete_track_and_related_data(track_number, deal_id):
         logging.info(f"Трек-номер {track_number} успешно удален из базы данных.")
     except Exception as e:
         logging.error(f"Ошибка при удалении данных для трек-номера {track_number} и сделки ID {deal_id}: {e}")
+
+
+@dp.message(Command("delete_client"))
+async def delete_client_command(message: Message):
+    """
+    Команда для удаления клиента из таблицы `clients` по номеру телефона.
+    Формат команды:
+        /delete_client {phone}
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("У вас нет прав для выполнения этой команды.")
+        return
+
+    # Разделяем сообщение для получения номера телефона
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.answer("Укажите номер телефона для удаления.\nПример: `/delete_client 87775554433`")
+        return
+
+    phone = command_parts[1].strip()
+
+    # Проверяем, что введён номер телефона
+    if not phone:
+        await message.answer("Вы не указали номер телефона. Пример: `/delete_client 87775554433`")
+        return
+
+    # Вызываем функцию для удаления клиента
+    is_deleted = delete_client_from_db(phone)
+    if is_deleted:
+        await message.answer(f"Запись с номером телефона {phone} успешно удалена.")
+    else:
+        await message.answer(f"Запись с номером телефона {phone} не найдена.")
 
 
 # ========== Запуск сервисов ==========
