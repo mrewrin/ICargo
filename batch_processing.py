@@ -3,7 +3,7 @@ import asyncio
 from config import bitrix  # Используем инициализированный BitrixAsync из config
 from db_management import get_unprocessed_webhooks, mark_webhook_as_processed, save_task_to_db, \
     get_task_id_by_deal_id, delete_task_from_db
-from process_functions import process_contact_update, process_deal_add
+from process_functions import process_contact_update, process_deal_add, process_deal_update
 
 # Инициализация логирования
 logging.basicConfig(
@@ -143,6 +143,7 @@ async def batch_send_to_bitrix():
 
     deal_ids = set()
     contact_ids = set()
+    deal_update_ids = set()
     operations = {}
     unregistered_deals = []
 
@@ -154,6 +155,8 @@ async def batch_send_to_bitrix():
             deal_ids.add(entity_id)
         elif event_type == "ONCRMCONTACTUPDATE":
             contact_ids.add(entity_id)
+        elif event_type == "ONCRMDEALUPDATE":
+            deal_update_ids.add(entity_id)
 
     # Получение информации о сделках
     if deal_ids:
@@ -172,6 +175,15 @@ async def batch_send_to_bitrix():
                 await process_contact_update(contact_info)
             except Exception as e:
                 logging.error(f"Ошибка при обработке контакта {contact_info['ID']}: {e}")
+
+    # Получение информации об обновленных сделках
+    if deal_update_ids:
+        deal_update_info_list = await fetch_batch_entity_info(list(deal_update_ids), "deal")
+        for deal_info in deal_update_info_list:
+            try:
+                await process_deal_update(deal_info)  # Вызов функции для обработки обновлений сделок
+            except Exception as e:
+                logging.error(f"Ошибка при обработке обновленной сделки {deal_info['ID']}: {e}")
 
     # Обработка незарегистрированных трек-номеров
     await handle_unregistered_deals(unregistered_deals, operations)

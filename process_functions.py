@@ -31,6 +31,13 @@ stage_mapping = {
     }
 }
 
+pickup_points = {
+    "pv_karaganda_1": "Караганда 1",
+    "pv_karaganda_2": "Караганда 2",
+    "pv_astana_1": "Астана ESIL",
+    "pv_astana_2": "Астана SARY-ARKA"
+}
+
 
 async def send_notification_if_required(deal_info, chat_id, track_number, pickup_point):
     """
@@ -704,3 +711,34 @@ async def process_contact_update(contact_info):
                 logging.error(f"Ошибка при отправке сообщения пользователю с chat_id: {chat_id}. Ошибка: {e}")
         else:
             logging.info("Поле 'Сумма заказов' не заполнено или равно нулю. Уведомление не отправлено.")
+
+
+async def process_deal_update(deal_info):
+    """
+    Обработка события ONCRMDEALUPDATE.
+    Если STAGE_ID изменился на один из ['C2:WON', 'C6:WON', 'C4:WON'],
+    удаляем сделку по трек-номеру из базы данных бота.
+    """
+    deal_id = deal_info.get('ID')
+    try:
+        # Извлекаем необходимые данные из информации о сделке
+        stage_id = deal_info.get('STAGE_ID')
+        track_number = deal_info.get('UF_CRM_1723542556619')  # Поле с трек-номером
+
+        # Логируем данные для отладки
+        logging.info(f"Обработка обновления сделки ID: {deal_id}, STAGE_ID: {stage_id}, трек-номер: {track_number}")
+
+        # Проверяем, изменился ли STAGE_ID на один из указанных
+        target_stages = ['C2:WON', 'C6:WON', 'C4:WON']
+        if stage_id in target_stages:
+            if track_number:
+                # Удаляем сделку только из базы данных
+                await delete_deal_by_track_number(track_number)
+                logging.info(f"Сделка с трек-номером {track_number} успешно удалена из базы данных.")
+            else:
+                logging.warning(f"Трек-номер для сделки ID {deal_id} отсутствует.")
+        else:
+            logging.info(
+                f"STAGE_ID сделки ID {deal_id} не входит в список {target_stages}. Никаких действий не требуется.")
+    except Exception as e:
+        logging.error(f"Ошибка при обработке обновления сделки ID {deal_id}: {e}")

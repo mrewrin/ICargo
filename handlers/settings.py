@@ -38,7 +38,7 @@ async def show_contact_info(callback: CallbackQuery, state: FSMContext):
         "pv_karaganda_1": "Пункт выдачи Караганда 1",
         "pv_karaganda_2": "Пункт выдачи Караганда 2",
         "pv_astana_1": "Пункт выдачи Астана ESIL",
-        "pv_astana_2": "Пункт выдачи Астана 2"
+        "pv_astana_2": "Пункт выдачи Астана SARY-ARKA"
     }
     pickup_point = pickup_points.get(pickup_point)
     contact_info_message = (
