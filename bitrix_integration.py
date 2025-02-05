@@ -559,32 +559,39 @@ def update_tracked_deal_in_bitrix(old_track_number, new_track_number):
     """
     Обновляет трек-номер в сделке Bitrix.
     """
-    deals = get_deals_by_track(old_track_number)  # Используем get_deals_by_track вместо find_deal_by_track_number
-    if deals:
-        deal = deals[0]  # Берем первую найденную сделку
-        deal_id = deal['ID']
-        url = webhook_url + 'crm.deal.update'
-        params = {
-            'id': deal_id,
-            'fields': {
-                'UF_CRM_1723542556619': new_track_number  # Поле для трек-номера
-            }
+    deals = get_deals_by_track(old_track_number)  # Получаем сделку по старому трек-номеру
+
+    if not deals:
+        logging.warning(f"❌ Сделка с трек-номером {old_track_number} не найдена в Bitrix!")
+        return False
+
+    deal = deals[0]  # Берем первую найденную сделку
+    deal_id = deal['ID']
+    url = webhook_url + 'crm.deal.update'
+
+    params = {
+        'id': deal_id,
+        'fields': {
+            'UF_CRM_1723542556619': new_track_number  # Поле для трек-номера
         }
+    }
 
-        response = requests.post(url, json=params)
+    logging.info(f"📤 Отправка запроса в Bitrix для сделки {deal_id}: {params}")
+    response = requests.post(url, json=params)
 
-        if response.status_code == 200 and response.json().get('result'):
-            logging.info(f"Трек-номер сделки ID {deal_id} успешно обновлен на {new_track_number}.")
-            # Проверяем, применилось ли обновление
-            updated_deal = get_deals_by_track(new_track_number)
-            if updated_deal:
-                logging.info(f"Подтверждено: сделка ID {deal_id} теперь имеет трек-номер {new_track_number}.")
-            else:
-                logging.warning(f"Не удалось подтвердить обновление трек-номера в Bitrix для сделки ID {deal_id}.")
+    if response.status_code == 200:
+        result = response.json()
+        logging.info(f"📥 Ответ Bitrix: {result}")
+
+        if result.get('result') == True:
+            logging.info(f"✅ Трек-номер сделки ID {deal_id} успешно обновлен на {new_track_number}.")
+            return True
         else:
-            logging.error(f"Ошибка при обновлении трек-номера в Bitrix: {response.text}")
+            logging.error(f"🚨 Ошибка при обновлении сделки {deal_id}: {result}")
+            return False
     else:
-        logging.warning(f"Сделка с трек-номером {old_track_number} не найдена в Bitrix.")
+        logging.error(f"🚨 Ошибка HTTP {response.status_code} при обновлении сделки {deal_id}: {response.text}")
+        return False
 
 
 def create_deal_with_stage(contact_id, track_number, personal_code, name_translit, pickup_point, chat_id, phone, pipeline_stage, category_id):

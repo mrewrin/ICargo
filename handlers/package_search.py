@@ -8,7 +8,8 @@ from db_management import get_client_by_chat_id, get_track_numbers_by_chat_id, u
     delete_deal_by_track_number, update_track_number_in_all_tables, get_name_track_by_track_number, \
     get_original_date_by_track
 from bitrix_integration import get_deals_by_track, delete_deal, update_tracked_deal_in_bitrix, get_deal_info
-from keyboards import create_track_keyboard, create_menu_button
+from keyboards import create_tracking_keyboard, create_management_keyboard, create_menu_button, \
+    create_single_track_management_keyboard
 from states import Track
 from handlers.utils import send_and_delete_previous
 
@@ -18,7 +19,8 @@ router = Router()
 
 def register_package_search_handlers(router_object):
     # Регистрация обработчиков для поиска посылок
-    router_object.callback_query.register(process_phone_search, F.data.in_({"find_package"}))
+    router_object.callback_query.register(process_tracking_search, F.data.in_({"tracking_view"}))
+    router_object.callback_query.register(process_management_search, F.data.in_({"management_view"}))
     router_object.callback_query.register(handle_track_status, lambda callback: callback.data.startswith("backtrack_"))
     router_object.callback_query.register(manage_single_track, lambda callback: callback.data.startswith("manage_single_track_"))
     router_object.callback_query.register(process_track_name_update, F.data.startswith("change_track_name_"))
@@ -28,21 +30,56 @@ def register_package_search_handlers(router_object):
     router_object.callback_query.register(process_delete_track, F.data.startswith("delete_track_"))
 
 
-@router.callback_query(F.data.in_({"find_package"}))
-async def process_phone_search(callback: CallbackQuery, state: FSMContext):
+# @router.callback_query(F.data.in_({"find_package"}))
+# async def process_phone_search(callback: CallbackQuery, state: FSMContext):
+#     await send_and_delete_previous(callback.message, "Ищем ваши посылки...", state=state)
+#     chat_id = callback.message.chat.id
+#     user_data = get_client_by_chat_id(chat_id)
+#
+#     if user_data:
+#         track_numbers = get_track_numbers_by_chat_id(chat_id)
+#
+#         if track_numbers:
+#             track_number_list = [(track[0], track[1]) for track in track_numbers]
+#             await send_and_delete_previous(
+#                 callback.message,
+#                 f"Ваши текущие посылки:",
+#                 reply_markup=create_track_keyboard(track_number_list),
+#                 state=state
+#             )
+#         else:
+#             await send_and_delete_previous(
+#                 callback.message,
+#                 "У вас нет добавленных трек-номеров.",
+#                 reply_markup=create_menu_button(),
+#                 state=state
+#             )
+#     else:
+#         await send_and_delete_previous(
+#             callback.message,
+#             "Контакт не найден. Пожалуйста, проверьте номер телефона и попробуйте снова.",
+#             state=state
+#         )
+#     await state.clear()
+
+
+@router.callback_query(F.data == "tracking_view")
+async def process_tracking_search(callback: CallbackQuery, state: FSMContext):
+    """
+    Отображает список трек-номеров пользователя для режима отслеживания (без управления).
+    """
     await send_and_delete_previous(callback.message, "Ищем ваши посылки...", state=state)
     chat_id = callback.message.chat.id
     user_data = get_client_by_chat_id(chat_id)
 
     if user_data:
         track_numbers = get_track_numbers_by_chat_id(chat_id)
-
         if track_numbers:
             track_number_list = [(track[0], track[1]) for track in track_numbers]
             await send_and_delete_previous(
                 callback.message,
-                f"Ваши текущие посылки:",
-                reply_markup=create_track_keyboard(track_number_list),
+                "Ваши текущие посылки:",
+                reply_markup=create_tracking_keyboard(track_number_list),  # Используем новую клавиатуру
                 state=state
             )
         else:
@@ -55,7 +92,42 @@ async def process_phone_search(callback: CallbackQuery, state: FSMContext):
     else:
         await send_and_delete_previous(
             callback.message,
-            "Контакт не найден. Пожалуйста, проверьте номер телефона и попробуйте снова.",
+            "Контакт не найден. Проверьте номер телефона и попробуйте снова.",
+            state=state
+        )
+    await state.clear()
+
+
+@router.callback_query(F.data == "management_view")
+async def process_management_search(callback: CallbackQuery, state: FSMContext):
+    """
+    Отображает список трек-номеров пользователя с возможностью управления.
+    """
+    await send_and_delete_previous(callback.message, "Загружаем список трек-номеров...", state=state)
+    chat_id = callback.message.chat.id
+    user_data = get_client_by_chat_id(chat_id)
+
+    if user_data:
+        track_numbers = get_track_numbers_by_chat_id(chat_id)
+        if track_numbers:
+            track_number_list = [(track[0], track[1]) for track in track_numbers]
+            await send_and_delete_previous(
+                callback.message,
+                "Выберите трек-номер для управления:",
+                reply_markup=create_management_keyboard(track_number_list),  # Используем новую клавиатуру
+                state=state
+            )
+        else:
+            await send_and_delete_previous(
+                callback.message,
+                "У вас нет добавленных трек-номеров.",
+                reply_markup=create_menu_button(),
+                state=state
+            )
+    else:
+        await send_and_delete_previous(
+            callback.message,
+            "Контакт не найден. Проверьте номер телефона и попробуйте снова.",
             state=state
         )
     await state.clear()
@@ -111,50 +183,26 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             )
 
         # Кнопка для управления выбранным треком
-        keyboard = create_track_keyboard([(track_number, name_track)], update_name=track_number)
+        keyboard = create_tracking_keyboard([(track_number, name_track)])
         await callback.answer(alert_text, show_alert=True)
         await callback.message.edit_text(text="Управление трек-номером:", reply_markup=keyboard)
     else:
         await callback.answer("📦 Сделки с этим трек-номером не найдены.", show_alert=True)
 
 
-@router.callback_query(lambda callback: callback.data.startswith("manage_single_track_"))
+@router.callback_query(F.data.startswith("manage_single_track_"))
 async def manage_single_track(callback: CallbackQuery, state: FSMContext):
-    track_number = callback.data.split("_")[2]
+    track_number = callback.data.split("_")[3]
+    track_name = get_name_track_by_track_number(track_number)  # Получаем имя
 
-    keyboard = InlineKeyboardBuilder()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="✏️ Изменить название",
-            callback_data=f"change_track_name_{track_number}"
-        ),
-        width=1
-    )
-    keyboard.row(
-        InlineKeyboardButton(
-            text="✏️ Изменить трек-номер",
-            callback_data=f"edit_track_{track_number}"
-        ),
-        width=1
-    )
-    keyboard.row(
-        InlineKeyboardButton(
-            text="❌ Удалить трек-номер",
-            callback_data=f"delete_track_{track_number}"
-        ),
-        width=1
-    )
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🔙 Назад в меню",
-            callback_data="find_package"
-        ),
-        width=1
-    )
+    if not track_name:
+        track_name = "Неизвестный трек"
+
+    keyboard = create_single_track_management_keyboard(track_number, track_name)
 
     await callback.message.edit_text(
-        f"⚙️ Управление трек-номером {track_number}:",
-        reply_markup=keyboard.as_markup()
+        f"⚙️ Управление трек-номером: {track_name} ({track_number})",
+        reply_markup=keyboard
     )
 
 
@@ -170,21 +218,36 @@ async def process_track_name_update(callback: CallbackQuery, state: FSMContext):
 async def process_track_name_input(message: Message, state: FSMContext):
     user_data = await state.get_data()
     track_number = user_data.get('track_number')
-    track_name = message.text.strip()
+    new_track_name = message.text.strip()
     chat_id = message.chat.id
 
-    update_track_number(track_number, track_name, chat_id)
+    # ✅ Обновляем название в базе
+    update_track_number(track_number, new_track_name, chat_id)
+
+    # ✅ Получаем обновлённое название из БД
+    updated_track_name = get_name_track_by_track_number(track_number)
+
     keyboard = InlineKeyboardBuilder()
+
     keyboard.row(
         InlineKeyboardButton(
-            text="🔍 Назад к списку трек-номеров",
-            callback_data="find_package"
+            text="⚙️ Назад к управлению",
+            callback_data="management_view"
         ),
         width=1
     )
+
     keyboard.row(
         InlineKeyboardButton(
-            text="📋 Меню",
+            text="🔍 Назад к отслеживанию",
+            callback_data="tracking_view"
+        ),
+        width=1
+    )
+
+    keyboard.row(
+        InlineKeyboardButton(
+            text="🔙 Назад в меню",
             callback_data="main_menu"
         ),
         width=1
@@ -192,10 +255,11 @@ async def process_track_name_input(message: Message, state: FSMContext):
 
     await send_and_delete_previous(
         message,
-        f"📄 Трек-номер {track_number} успешно обновлен с названием '{track_name}'!",
+        f"📄 Трек-номер {track_number} успешно обновлён с названием '{updated_track_name}'!",
         reply_markup=keyboard.as_markup(),
         state=state
     )
+
     await state.clear()
 
 
@@ -264,7 +328,7 @@ async def process_track_number_input(message: Message, state: FSMContext):
         keyboard.row(
             InlineKeyboardButton(
                 text="🔍 Назад к списку трек-номеров",
-                callback_data="find_package"
+                callback_data="management_view"
             ),
             width=1
         )
@@ -294,21 +358,26 @@ async def process_track_number_input(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("delete_track_"))
 async def process_delete_track(callback: CallbackQuery):
-    track_number = callback.data.split("_", maxsplit=2)[2]
+    track_number = callback.data.split("_")[2]  # Здесь точно получаем номер
+    logging.info(f"⏳ Начало удаления трек-номера: {track_number}")
 
     deals = get_deals_by_track(track_number)
-    if deals:
+
+    if not deals:
+        logging.warning(f"❌ Сделка с трек-номером {track_number} не найдена в Bitrix.")
+    else:
         last_deal = deals[0]
         deal_status = last_deal.get('STAGE_ID')
         deal_id = last_deal.get('ID')
 
-        # Список стадий, на которых разрешено удаление
+        logging.info(f"🔎 Найдена сделка в Bitrix: ID={deal_id}, статус={deal_status}")
+
+        # Разрешенные стадии для удаления
         allowed_stages = [
             "C6:UC_VEHS4L", "C6:UC_874DXJ", "C6:WON", "C6:LOSE",
             "C2:UC_8EQX6X", "C2:WON", "C2:LOSE", "C8:NEW"
         ]
 
-        # Проверяем, входит ли стадия в список разрешённых
         if deal_status not in allowed_stages:
             await send_and_delete_previous(
                 callback.message,
@@ -318,36 +387,27 @@ async def process_delete_track(callback: CallbackQuery):
             return
 
         delete_result = delete_deal(deal_id)
-        if not delete_result:
+        if delete_result:
+            logging.info(f"✅ Сделка ID {deal_id} ({track_number}) успешно удалена из Bitrix.")
+        else:
+            logging.error(f"🚨 Ошибка при удалении сделки {deal_id} ({track_number}) в Bitrix!")
             await send_and_delete_previous(
                 callback.message,
-                "Ошибка при удалении трек-номера. Попробуйте позже.",
+                "⚠️ Ошибка при удалении трек-номера. Попробуйте позже.",
                 state=None
             )
             return
 
+    # Удаляем из локальной БД
     await delete_deal_by_track_number(track_number)
-    # Создаем кастомную клавиатуру
-    keyboard = InlineKeyboardBuilder()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🔍 Назад к списку трек-номеров",
-            callback_data="find_package"
-        ),
-        width=1
-    )
-    keyboard.row(
-        InlineKeyboardButton(
-            text="📋 Меню",
-            callback_data="main_menu"
-        ),
-        width=1
-    )
+    logging.info(f"✅ Локальная запись трек-номера {track_number} удалена.")
 
-    await send_and_delete_previous(
-        callback.message,
-        f"✅ Трек-номер {track_number} успешно удален из системы.",
-        reply_markup=keyboard.as_markup(),
-        state=None
+    # Обновляем список треков без удаленного
+    track_data = get_track_numbers_by_chat_id(callback.message.chat.id)  # Получаем все треки пользователя
+    keyboard = create_tracking_keyboard(track_data)  # Используем актуальную клавиатуру
+
+    await callback.message.edit_text(
+        f"✅ Трек-номер {track_number} успешно удален.",
+        reply_markup=keyboard
     )
     await callback.answer()

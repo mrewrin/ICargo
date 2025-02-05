@@ -16,7 +16,8 @@ from db_management import init_db, get_all_chat_ids, is_vip_code_available, upda
     delete_deal_by_track_number, delete_client_from_db
 from bitrix_integration import update_contact_code_in_bitrix, get_deal_info, get_deals_by_track_ident, delete_deal
 from aiogram.filters import Command
-from aiogram.types import Message, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
+from aiogram.types import Message, BotCommand, BotCommandScopeDefault, BotCommandScopeChat, FSInputFile
+from functions import export_database_to_excel
 
 
 # ========== Инициализация бота и приложения ==========
@@ -66,6 +67,7 @@ async def set_bot_commands():
                                                         "или /delete_track number {track_number})"),
         BotCommand(command="/delete_client", description="Удалить клиента по номеру телефона "
                                                          "(ввести /delete_client {номер_телефона})"),
+        BotCommand(command="/export_db", description="Выгрузить базу данных в Excel"),
         ]
     for admin_id in ADMIN_IDS:
         await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))
@@ -366,7 +368,21 @@ async def delete_client_command(message: Message):
         await message.answer(f"Запись с номером телефона {phone} не найдена.")
 
 
+@dp.message(Command("export_db"))
+async def export_database(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("У вас нет прав для выполнения этой команды.")
+        return
+
+    try:
+        output_file = export_database_to_excel()
+        document = FSInputFile(output_file)  # Оборачиваем в FSInputFile
+        await message.answer_document(document=document, caption="📂 Вот ваша актуальная версия базы данных")
+    except Exception as e:
+        await message.answer(f"⚠ Ошибка при выгрузке базы данных: {e}")
+
 # ========== Запуск сервисов ==========
+
 
 async def start_services():
     logging.info("Запуск всех сервисов...")

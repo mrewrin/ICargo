@@ -259,14 +259,22 @@ def update_name_track_by_track_number(track_number, new_name):
     conn = sqlite3.connect('clients.db')
     cursor = conn.cursor()
     try:
+        logging.info(f"Попытка обновления name_track для {track_number} на '{new_name}'.")
+
         cursor.execute(
             "UPDATE track_numbers SET name_track = ? WHERE track_number = ?",
             (new_name, track_number)
         )
         conn.commit()  # Фиксируем изменения в базе
-        logging.info(f"Название для трек-номера {track_number} успешно обновлено на '{new_name}'.")
+
+        if cursor.rowcount == 0:
+            logging.warning(f"❌ Трек-номер {track_number} не найден в базе. Обновление не выполнено.")
+        else:
+            logging.info(f"✅ Название для трек-номера {track_number} успешно обновлено на '{new_name}'.")
+
     except Exception as e:
-        logging.error(f"Ошибка при обновлении name_track для трек-номера {track_number}: {e}")
+        logging.error(f"🔥 Ошибка при обновлении name_track для {track_number}: {e}")
+
     finally:
         conn.close()
 

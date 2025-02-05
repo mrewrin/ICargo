@@ -4,7 +4,7 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from bitrix_integration import create_deal, get_deals_by_track, update_deal_contact, create_deal_with_stage, delete_deal
 from db_management import get_client_by_chat_id, save_track_number, save_deal_to_db, get_track_from_db, save_deal_history
-from keyboards import create_menu_button, create_track_keyboard
+from keyboards import create_menu_button, create_tracking_keyboard, create_management_keyboard
 from states import Track, Menu
 from handlers.utils import send_and_delete_previous
 
@@ -218,7 +218,7 @@ async def process_track_name_input(message: Message, state: FSMContext):
     await send_and_delete_previous(
         message,
         f"📄 Трек-номер {track_number} с названием '{track_name}' успешно добавлен!",
-        reply_markup=create_track_keyboard(track_data=[], update_name=track_number),
+        reply_markup=create_menu_button(),
         state=state
     )
     await state.clear()
