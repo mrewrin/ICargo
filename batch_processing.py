@@ -83,6 +83,13 @@ async def send_batch_chunk(batch_chunk, batch_size=50, max_retries=5):
             # Выполняем batch-запрос
             response = await bitrix.call_batch(batch_cmd)
 
+            # 🛑 Проверяем ошибки и игнорируем "Not found"
+            if 'result_error' in response:
+                for operation, error in response['result_error'].items():
+                    if isinstance(error, dict) and error.get('error_description') == 'Not found':
+                        logging.info(f"✅ Bitrix подтвердил удаление сделки {operation}. Ошибка игнорируется.")
+                        response['result_error'].pop(operation)  # Убираем ошибку, чтобы не вызывать исключение
+
             # Обработка ошибок
             if 'error' in response:
                 error_type = response.get('error')

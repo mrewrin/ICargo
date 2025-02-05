@@ -14,10 +14,11 @@ def create_reply_menu_keyboard():
 def create_inline_main_menu():
     menu_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📄 Добавить трек-номер", callback_data="add_track")],
-        [InlineKeyboardButton(text="🔍 Отслеживание посылок", callback_data="find_package")],
+        [InlineKeyboardButton(text="🔍 Отслеживание посылок", callback_data="tracking_view")],  # Новый пункт
+        [InlineKeyboardButton(text="⚙️ Управление трек-номерами", callback_data="management_view")],  # Новый пункт
         [InlineKeyboardButton(text="💡 Инструкция по заполнению адреса", callback_data="address_instructions")],
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
-        [InlineKeyboardButton(text="📞 Обратиться в поддержку",  url="https://t.me/IceCargoProxyBot")]
+        [InlineKeyboardButton(text="📞 Обратиться в поддержку", url="https://t.me/IceCargoProxyBot")]
     ])
     return menu_keyboard
 
@@ -64,61 +65,151 @@ def create_pickup_keyboard(city):
     return pickup_keyboard.as_markup()
 
 
-def create_track_keyboard(track_data, update_name=None):
+# def create_track_keyboard(track_data, update_name=None):
+#     """
+#     Функция для создания клавиатуры с трек-номерами.
+#     track_data - список кортежей вида (track_number, track_name).
+#     update_name - трек-номер, для которого нужно добавить кнопки изменения названия, трек-номера или удаления.
+#     """
+#     track_keyboard = InlineKeyboardBuilder()
+#
+#     for track_number, track_name in track_data:
+#         if track_number:
+#             # Используем track_name или track_number, если track_name отсутствует
+#             track_name = track_name or track_number
+#             track_keyboard.row(InlineKeyboardButton(
+#                 text=track_name,
+#                 callback_data=f"backtrack_{track_number}"),
+#                 width=1)
+#     if update_name:
+#         # Добавляем кнопку для изменения названия трек-номера
+#         track_keyboard.row(
+#             InlineKeyboardButton(
+#                 text="✏️ Изменить название трек-номера",
+#                 callback_data=f"change_track_name_{update_name}"
+#             ),
+#             width=1
+#         )
+#         # Добавляем кнопку для изменения трек-номера
+#         track_keyboard.row(
+#             InlineKeyboardButton(
+#                 text="✏️ Изменить трек-номер",
+#                 callback_data=f"edit_track_{update_name}"
+#             ),
+#             width=1
+#         )
+#         # Добавляем кнопку для удаления трек-номера
+#         track_keyboard.row(
+#             InlineKeyboardButton(
+#                 text="❌ Удалить трек-номер",
+#                 callback_data=f"delete_track_{update_name}"
+#             ),
+#             width=1
+#         )
+#     track_keyboard.row(InlineKeyboardButton(
+#         text="🔍 Назад к списку трек-номеров",
+#         callback_data="find_package"),
+#         width=1)
+#     track_keyboard.row(InlineKeyboardButton(
+#         text="📄 Добавить трек-номер",
+#         callback_data="add_track"),
+#         width=1)
+#     track_keyboard.row(InlineKeyboardButton(
+#         text="📋 Меню",
+#         callback_data="main_menu"),
+#         width=1)
+#
+#     return track_keyboard.as_markup()
+
+
+def create_tracking_keyboard(track_data):
     """
-    Функция для создания клавиатуры с трек-номерами.
-    track_data - список кортежей вида (track_number, track_name).
-    update_name - трек-номер, для которого нужно добавить кнопки изменения названия, трек-номера или удаления.
+    Клавиатура для режима отслеживания: просто кнопки с трек-номерами, без управления.
     """
-    track_keyboard = InlineKeyboardBuilder()
+    tracking_keyboard = InlineKeyboardBuilder()
 
     for track_number, track_name in track_data:
         if track_number:
-            # Используем track_name или track_number, если track_name отсутствует
             track_name = track_name or track_number
-            track_keyboard.row(InlineKeyboardButton(
-                text=track_name,
-                callback_data=f"backtrack_{track_number}"),
-                width=1)
-    if update_name:
-        # Добавляем кнопку для изменения названия трек-номера
-        track_keyboard.row(
-            InlineKeyboardButton(
-                text="✏️ Изменить название трек-номера",
-                callback_data=f"change_track_name_{update_name}"
-            ),
-            width=1
-        )
-        # Добавляем кнопку для изменения трек-номера
-        track_keyboard.row(
-            InlineKeyboardButton(
-                text="✏️ Изменить трек-номер",
-                callback_data=f"edit_track_{update_name}"
-            ),
-            width=1
-        )
-        # Добавляем кнопку для удаления трек-номера
-        track_keyboard.row(
-            InlineKeyboardButton(
-                text="❌ Удалить трек-номер",
-                callback_data=f"delete_track_{update_name}"
-            ),
-            width=1
-        )
-    track_keyboard.row(InlineKeyboardButton(
-        text="🔍 Назад к списку трек-номеров",
-        callback_data="find_package"),
-        width=1)
-    track_keyboard.row(InlineKeyboardButton(
-        text="📄 Добавить трек-номер",
-        callback_data="add_track"),
-        width=1)
-    track_keyboard.row(InlineKeyboardButton(
-        text="📋 Меню",
-        callback_data="main_menu"),
-        width=1)
+            tracking_keyboard.row(
+                InlineKeyboardButton(
+                    text=track_name,
+                    callback_data=f"backtrack_{track_number}"  # Просто показывает `show_alert`
+                ),
+                width=1
+            )
 
-    return track_keyboard.as_markup()
+    tracking_keyboard.row(
+        InlineKeyboardButton(text="📋 Меню", callback_data="main_menu"),
+        width=1
+    )
+
+    return tracking_keyboard.as_markup()
+
+
+def create_management_keyboard(track_data):
+    """
+    Клавиатура для режима управления: кнопки с трек-номерами, открывающими меню управления.
+    """
+    management_keyboard = InlineKeyboardBuilder()
+
+    for track_number, track_name in track_data:
+        if track_number:
+            track_name = track_name or track_number
+            management_keyboard.row(
+                InlineKeyboardButton(
+                    text=track_name,
+                    callback_data=f"manage_single_track_{track_number}"  # Открывает меню управления
+                ),
+                width=1
+            )
+    return management_keyboard.as_markup()
+
+
+def create_single_track_management_keyboard(track_number, track_name):
+    """
+    Клавиатура управления для одного трек-номера.
+    """
+    keyboard = InlineKeyboardBuilder()
+
+    keyboard.row(
+        InlineKeyboardButton(
+            text=f"{track_name}",
+            callback_data="none"  # Просто заголовок, без действия
+        ),
+        width=1
+    )
+
+    keyboard.row(
+        InlineKeyboardButton(
+            text="✏️ Изменить название",
+            callback_data=f"change_track_name_{track_number}"
+        ),
+        width=1
+    )
+    keyboard.row(
+        InlineKeyboardButton(
+            text="✏️ Изменить трек-номер",
+            callback_data=f"edit_track_{track_number}"
+        ),
+        width=1
+    )
+    keyboard.row(
+        InlineKeyboardButton(
+            text="❌ Удалить трек-номер",
+            callback_data=f"delete_track_{track_number}"
+        ),
+        width=1
+    )
+    keyboard.row(
+        InlineKeyboardButton(
+            text="🔙 Назад в меню",
+            callback_data="management_view"
+        ),
+        width=1
+    )
+
+    return keyboard.as_markup()
 
 
 async def update_keyboard(callback: CallbackQuery, new_markup: InlineKeyboardMarkup):

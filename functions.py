@@ -1,5 +1,6 @@
 import re
-
+import sqlite3
+import pandas as pd
 
 def transliterate(string):
     """
@@ -82,7 +83,7 @@ def generate_address_instructions(name_cyrillic, personal_code, name_translit, p
             f"📍 Адрес филиала:\n"
             f"ул\\. Кабанбай батыра, 42\n\n"
             f"Ссылка на группу: https://t\\.me/iCargoLife\n"
-            f"📞 Вы можете связаться с нами по номеру: 8 \\(700\\) 509\\-90\\-20\n\n"
+            f"📞 Вы можете связаться с нами по номеру: 8 \\(700\\) 060\\-10\\-36\n\n"
             f"Ваше обращение не останется без ответа\\. Мы всегда на связи и будем рады помочь Вам по любому вопросу"
         ),
         "pv_astana_2": (
@@ -119,3 +120,18 @@ def generate_address_instructions(name_cyrillic, personal_code, name_translit, p
         )
     }
     return instructions.get(pickup_point_code, "Пункт выдачи не указан или не поддерживается.")
+
+
+def export_database_to_excel():
+    db_path = "clients.db"
+    conn = sqlite3.connect(db_path)
+
+    table_name = "clients"  # Укажите имя вашей таблицы
+    query = f"SELECT * FROM {table_name}"
+    df = pd.read_sql_query(query, conn)
+
+    output_file = "output.xlsx"
+    df.to_excel(output_file, index=False, engine='openpyxl')
+
+    conn.close()
+    return output_file
