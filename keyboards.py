@@ -38,6 +38,15 @@ def create_contact_keyboard():
     return contact_keyboard
 
 
+def create_track_added_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📄 Добавить трек-номер", callback_data="add_track")],
+        [InlineKeyboardButton(text="🔍 Назад к списку трек-номеров", callback_data="tracking_view")],
+        [InlineKeyboardButton(text="📋 Меню", callback_data="main_menu")]
+    ])
+    return keyboard
+
+
 def create_settings_keyboard():
     settings_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 Мои контактные данные", callback_data="show_contact_info")],
@@ -163,6 +172,11 @@ def create_management_keyboard(track_data):
                 ),
                 width=1
             )
+
+    management_keyboard.row(
+        InlineKeyboardButton(text="📋 Меню", callback_data="main_menu"),
+        width=1
+    )
     return management_keyboard.as_markup()
 
 
