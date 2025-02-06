@@ -30,39 +30,6 @@ def register_package_search_handlers(router_object):
     router_object.callback_query.register(process_delete_track, F.data.startswith("delete_track_"))
 
 
-# @router.callback_query(F.data.in_({"find_package"}))
-# async def process_phone_search(callback: CallbackQuery, state: FSMContext):
-#     await send_and_delete_previous(callback.message, "Ищем ваши посылки...", state=state)
-#     chat_id = callback.message.chat.id
-#     user_data = get_client_by_chat_id(chat_id)
-#
-#     if user_data:
-#         track_numbers = get_track_numbers_by_chat_id(chat_id)
-#
-#         if track_numbers:
-#             track_number_list = [(track[0], track[1]) for track in track_numbers]
-#             await send_and_delete_previous(
-#                 callback.message,
-#                 f"Ваши текущие посылки:",
-#                 reply_markup=create_track_keyboard(track_number_list),
-#                 state=state
-#             )
-#         else:
-#             await send_and_delete_previous(
-#                 callback.message,
-#                 "У вас нет добавленных трек-номеров.",
-#                 reply_markup=create_menu_button(),
-#                 state=state
-#             )
-#     else:
-#         await send_and_delete_previous(
-#             callback.message,
-#             "Контакт не найден. Пожалуйста, проверьте номер телефона и попробуйте снова.",
-#             state=state
-#         )
-#     await state.clear()
-
-
 @router.callback_query(F.data == "tracking_view")
 async def process_tracking_search(callback: CallbackQuery, state: FSMContext):
     """
@@ -79,7 +46,7 @@ async def process_tracking_search(callback: CallbackQuery, state: FSMContext):
             await send_and_delete_previous(
                 callback.message,
                 "Ваши текущие посылки:",
-                reply_markup=create_tracking_keyboard(track_number_list),  # Используем новую клавиатуру
+                reply_markup=create_tracking_keyboard(track_number_list),  # Используем правильную клавиатуру
                 state=state
             )
         else:
@@ -185,7 +152,6 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
         # Кнопка для управления выбранным треком
         keyboard = create_tracking_keyboard([(track_number, name_track)])
         await callback.answer(alert_text, show_alert=True)
-        await callback.message.edit_text(text="Управление трек-номером:", reply_markup=keyboard)
     else:
         await callback.answer("📦 Сделки с этим трек-номером не найдены.", show_alert=True)
 
@@ -404,7 +370,8 @@ async def process_delete_track(callback: CallbackQuery):
 
     # Обновляем список треков без удаленного
     track_data = get_track_numbers_by_chat_id(callback.message.chat.id)  # Получаем все треки пользователя
-    keyboard = create_tracking_keyboard(track_data)  # Используем актуальную клавиатуру
+    # Используем клавиатуру управления трек-номерами
+    keyboard = create_management_keyboard(track_data)
 
     await callback.message.edit_text(
         f"✅ Трек-номер {track_number} успешно удален.",
