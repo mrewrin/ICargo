@@ -8,6 +8,7 @@ bot_token = os.getenv("BOT_TOKEN")
 proxy_bot_token = os.getenv("PROXY_BOT_TOKEN")
 webhook_url = os.getenv("WEBHOOK_URL")
 bitrix = BitrixAsync(webhook_url)
+DATABASE_PATH = os.getenv("DATABASE_PATH", "/data/clients.db")
 
 
 CELERY_ACCEPT_CONTENT = ['json']
