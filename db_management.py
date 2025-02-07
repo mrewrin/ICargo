@@ -151,7 +151,7 @@ def init_db():
 
 # Генерация и проверка уникальных кодов
 def generate_unique_code():
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     while True:
@@ -175,7 +175,7 @@ def generate_unique_code():
 
 
 def is_vip_code_available(code):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT vip_code FROM vip_codes WHERE vip_code = ?", (code,))
     result = cursor.fetchone()
@@ -184,7 +184,7 @@ def is_vip_code_available(code):
 
 
 def is_code_used_by_another_client(new_code):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -200,7 +200,7 @@ def update_personal_code(old_code, new_code):
     """
     Обновляет персональный код в таблицах `clients` и `tracked_deals`.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     try:
@@ -229,7 +229,7 @@ def update_personal_code(old_code, new_code):
 
 
 def remove_vip_code(code):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM vip_codes WHERE vip_code = ?", (code,))
     conn.commit()
@@ -240,7 +240,7 @@ def get_name_track_by_track_number(track_number):
     """
     Получает name_track по track_number из таблицы track_numbers.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT name_track FROM track_numbers WHERE track_number = ?", (track_number,))
@@ -257,7 +257,7 @@ def update_name_track_by_track_number(track_number, new_name):
     """
     Обновляет name_track для track_number в таблице track_numbers.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     try:
         logging.info(f"Попытка обновления name_track для {track_number} на '{new_name}'.")
@@ -282,7 +282,7 @@ def update_name_track_by_track_number(track_number, new_name):
 
 # Операции с данными клиентов
 def save_client_data(chat_id, contact_id, personal_code, name_cyrillic, name_translit, phone, city, pickup_point):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Вставка данных в таблицу
@@ -298,7 +298,7 @@ def save_client_data(chat_id, contact_id, personal_code, name_cyrillic, name_tra
 
 
 def update_client_data(chat_id, contact_id, personal_code, name_cyrillic, name_translit, phone, city, pickup_point):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Обновляем данные в таблице, если chat_id уже существует
@@ -314,7 +314,7 @@ def update_client_data(chat_id, contact_id, personal_code, name_cyrillic, name_t
 
 
 def get_all_clients():
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Выполняем запрос на выборку всех данных из таблицы
@@ -328,7 +328,7 @@ def get_all_clients():
 
 
 def get_client_by_chat_id(chat_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute('SELECT contact_id, personal_code, name_cyrillic, name_translit, '
@@ -354,7 +354,7 @@ def get_client_by_chat_id(chat_id):
 
 
 def get_client_by_contact_id(contact_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM clients WHERE contact_id = ?", (contact_id,))
@@ -378,7 +378,7 @@ def get_chat_id_by_phone(phone):
     Проверяет, зарегистрирован ли пользователь с данным номером телефона.
     Возвращает chat_id, если пользователь найден.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT chat_id FROM clients WHERE phone = ?", (phone,))
@@ -389,7 +389,7 @@ def get_chat_id_by_phone(phone):
 
 
 def check_chat_id_exists(chat_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Выполняем запрос на проверку наличия chat_id
@@ -403,7 +403,7 @@ def check_chat_id_exists(chat_id):
 
 
 def get_all_chat_ids():
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Запрос на получение всех chat_id из таблицы clients
@@ -418,7 +418,7 @@ def get_all_chat_ids():
 
 
 def get_personal_code_by_chat_id(chat_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute('SELECT personal_code FROM clients WHERE chat_id = ?', (chat_id,))
@@ -435,7 +435,7 @@ def get_chat_id_by_personal_code(personal_code):
     """
     Получает chat_id по указанному personal_code из таблицы clients.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute('SELECT chat_id FROM clients WHERE personal_code = ?', (personal_code,))
@@ -449,7 +449,7 @@ def get_chat_id_by_personal_code(personal_code):
 
 
 def get_contact_id_by_code(code):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     logging.info(f"Проверка кода в базе данных: {code} (тип: {type(code)})")
     cursor.execute('SELECT contact_id FROM clients WHERE personal_code = ?', (code,))
@@ -464,7 +464,7 @@ def get_chat_id_by_contact_id(contact_id):
     """
     Получает chat_id из базы данных по contact_id.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Выполняем запрос для получения chat_id по contact_id
@@ -480,7 +480,7 @@ def get_chat_id_by_contact_id(contact_id):
 
 # Работа с трек-номерами
 def save_track_number(track_number, name_track, chat_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Вставка трек-номера и его названия в таблицу
@@ -494,7 +494,7 @@ def save_track_number(track_number, name_track, chat_id):
 
 
 def update_track_number(track_number, name_track, chat_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     logging.info(f"Изменение названия для трек-номера {track_number} на {name_track} для пользователя {chat_id}")
     # Обновление названия трек-номера по track_number и chat_id
@@ -515,7 +515,7 @@ def update_track_number_in_all_tables(old_track_number, new_track_number, chat_i
     :param new_track_number: Новый трек-номер, на который нужно заменить.
     :param chat_id: ID чата пользователя.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     logging.info(f"Обновление трек-номера {old_track_number} на {new_track_number} для пользователя {chat_id}")
 
@@ -546,7 +546,7 @@ def update_track_number_in_all_tables(old_track_number, new_track_number, chat_i
 
 
 def get_track_data_by_track_number(track_number):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Поиск трек-номера в таблице track_numbers
@@ -569,7 +569,7 @@ def get_track_data_by_track_number(track_number):
 
 
 def get_track_numbers_by_chat_id(chat_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Выбор всех трек-номеров для данного chat_id
@@ -586,7 +586,7 @@ def get_track_from_db(track_number):
     Проверяет наличие трек-номера в базе данных.
     Возвращает True, если трек-номер существует, иначе False.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Поиск трек-номера в таблице track_numbers
@@ -603,7 +603,7 @@ def get_track_from_db(track_number):
 
 
 def get_all_track_numbers():
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Выбираем все данные из таблицы track_numbers
@@ -623,7 +623,7 @@ def save_deal_to_db(deal_id, contact_id, personal_code, track_number, pickup_poi
     """
     Сохраняет информацию о сделке в таблицу tracked_deals.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     try:
@@ -646,7 +646,7 @@ def update_tracked_deal(deal_id, track_number):
     :param deal_id: ID сделки.
     :param track_number: Трек-номер сделки.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     try:
@@ -670,7 +670,7 @@ def find_deal_by_track(track_number, current_deal_id=None):
     :param current_deal_id: ID текущей сделки для исключения из результата.
     :return: Словарь с ID сделки или None, если ничего не найдено.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Выполняем запрос к таблице tracked_deals
@@ -709,7 +709,7 @@ async def delete_deal_by_track_number(track_number):
 
     logging.info(f"Трек номер для удаления: {track_number}")
 
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Проверим, хранится ли трек-номер в базе перед удалением
@@ -732,7 +732,7 @@ def save_webhook_to_db(entity_id, event_type):
     """
     Сохраняет данные вебхука в таблицу webhooks.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Текущая метка времени для записи
@@ -753,7 +753,7 @@ def get_latest_webhook_timestamp():
     Получает время последнего поступившего вебхука из базы данных.
     Возвращает datetime объекта или None, если вебхуков нет.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -774,7 +774,7 @@ def mark_webhook_as_processed(webhook_id):
     """
     Помечает вебхук с заданным ID как обработанный.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -792,7 +792,7 @@ def get_unprocessed_webhooks():
     Получает все необработанные вебхуки из базы данных.
     Возвращает список словарей с данными вебхуков.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -824,7 +824,7 @@ def save_processed_result(entity_id, event_type, data):
     """
     Сохраняет обработанные данные вебхука в таблицу processed_results.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Преобразуем данные в JSON-строку для хранения
@@ -845,7 +845,7 @@ def get_unprocessed_results():
     Получает все необработанные результаты для пакетной отправки.
     Возвращает список словарей с данными обработанных вебхуков.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -891,7 +891,7 @@ def mark_results_as_processed(result_ids):
         return
 
     # Подключение и обновление базы данных
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     try:
@@ -914,7 +914,7 @@ def get_final_deal_from_db(contact_id):
     """
     Извлекает информацию об итоговой сделке для заданного контакта из таблицы final_deals.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Извлекаем последнюю итоговую сделку для указанного контакта
@@ -944,7 +944,7 @@ def save_final_deal_to_db(contact_id, deal_id, creation_date, track_number, curr
     """
     Сохраняет новую итоговую сделку в таблицу final_deals.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Вставляем новую итоговую сделку в таблицу
@@ -962,7 +962,7 @@ def update_final_deal_in_db(deal_id, track_numbers, stage_id):
     """
     Обновляет информацию об итоговой сделке в таблице final_deals.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Обновляем трек-номера и этап текущей сделки
@@ -981,7 +981,7 @@ def update_final_deal_id(contact_id, timestamp, new_deal_id):
     """
     Обновляет ID итоговой сделки в таблице final_deals, основываясь на contact_id и временной метке.
     """
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     # Обновляем ID итоговой сделки
@@ -998,7 +998,7 @@ def update_final_deal_id(contact_id, timestamp, new_deal_id):
 
 # Функция для сохранения TASK_ID в базу данных
 def save_task_to_db(deal_id, task_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute(
         'INSERT OR REPLACE INTO deal_tasks (deal_id, task_id) VALUES (?, ?)',
@@ -1011,7 +1011,7 @@ def save_task_to_db(deal_id, task_id):
 
 # Функция для получения TASK_ID по DEAL_ID из базы данных
 def get_task_id_by_deal_id(deal_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute(
         'SELECT task_id FROM deal_tasks WHERE deal_id = ?',
@@ -1023,7 +1023,7 @@ def get_task_id_by_deal_id(deal_id):
 
 
 def delete_task_from_db(deal_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute(
         'DELETE FROM deal_tasks WHERE deal_id = ?',
@@ -1035,7 +1035,7 @@ def delete_task_from_db(deal_id):
 
 
 def save_broadcast_message(chat_id, message_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1048,7 +1048,7 @@ def save_broadcast_message(chat_id, message_id):
 
 
 def get_last_broadcast_messages():
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1061,7 +1061,7 @@ def get_last_broadcast_messages():
 
 
 def save_deal_history(deal_id, track_number, original_date_modify, stage_id):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO deal_history (deal_id, track_number, original_date_modify, stage_id)
@@ -1075,7 +1075,7 @@ def save_deal_history(deal_id, track_number, original_date_modify, stage_id):
 
 
 def get_original_date_by_track(track_number):
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT original_date_modify, stage_id FROM deal_history WHERE track_number = ?
@@ -1090,7 +1090,7 @@ def delete_client_from_db(phone):
     Удаляет клиента из таблицы `clients` по номеру телефона.
     """
     try:
-        conn = sqlite3.connect('clients.db')
+        conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM clients WHERE phone = ?", (phone,))
         deleted_rows = cursor.rowcount
