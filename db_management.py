@@ -3,11 +3,12 @@ import random
 import logging
 import json
 from datetime import datetime
+from config import DATABASE_PATH
 
 
 # Инициализация и настройка базы данных
 def init_db():
-    conn = sqlite3.connect('clients.db')
+    conn = sqlite3.connect(DATABASE_PATH)  # путь к базе берётся из переменной
     cursor = conn.cursor()
 
     # Создаем таблицу clients, если её нет

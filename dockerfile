@@ -13,5 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем все остальные файлы в контейнер
 COPY . .
 
+# Создаем папку для базы данных внутри контейнера
+RUN mkdir -p /data
+
 # Указываем команду для запуска вашего бота
 CMD ["python", "main.py"]
