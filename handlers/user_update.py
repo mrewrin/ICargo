@@ -118,7 +118,7 @@ async def process_update_pickup(callback: CallbackQuery, state: FSMContext):
     contact_id = str(old_client_data["contact_id"])
 
     # Обновление данных клиента
-    update_contact(contact_id, name_translit, personal_code, phone, city)
+    update_contact(contact_id, name_translit, personal_code, phone, city, pickup_point)
     await state.update_data(contact_id=contact_id)
     update_client_data(
         chat_id=chat_id,

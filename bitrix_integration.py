@@ -315,16 +315,27 @@ async def find_final_deal_for_contact(contact_id, exclude_deal_id=None):
 
 
 # Создание и обновление контактов
-def create_contact(name, personal_code, phone, city):
+# Маппинг значений pickup_point
+locations = {
+    'pv_astana_1': "ПВ Астана ESIL",
+    'pv_astana_2': "ПВ Астана SARY-ARKA",
+    'pv_karaganda_1': "ПВ №1"
+}
+
+
+def create_contact(name, personal_code, phone, city, pickup_point):
     """
-    Создает контакт с указанными именем, телефоном и городом.
+    Создает контакт с указанными данными и затем обновляет его пользовательское поле UF_CRM_1737381798322.
     Возвращает ID созданного контакта.
     """
-    url = webhook_url + 'crm.contact.add'
-    if city == "astana":
-        city = "44"
-    elif city == "karaganda":
-        city = "46"
+    url_create = webhook_url + 'crm.contact.add'
+
+    city_codes = {
+        "astana": "44",
+        "karaganda": "46"
+    }
+
+    city = city_codes.get(city, city)  # Преобразуем город в код, если он есть в словаре
 
     params_contact = {
         'fields': {
@@ -336,10 +347,12 @@ def create_contact(name, personal_code, phone, city):
         }
     }
 
-    response = requests.post(url, json=params_contact)
+    response = requests.post(url_create, json=params_contact)
 
     if response.status_code == 200:
         contact_id = response.json().get('result')
+        if contact_id:
+            update_contact_pickup(contact_id, pickup_point)  # Отдельный запрос на обновление пользовательского поля
         return contact_id
     else:
         print(f"Ошибка при создании контакта: {response.status_code}")
@@ -347,21 +360,21 @@ def create_contact(name, personal_code, phone, city):
         return None
 
 
-def update_contact(contact_id, name=None, personal_code=None, phone=None, city=None):
+def update_contact(contact_id, name=None, personal_code=None, phone=None, city=None, pickup_point=None):
     """
-    Обновляет данные контакта в Битрикс по contact_id.
-    Можно передать любые комбинации параметров для обновления: имя, телефон, город.
+    Обновляет данные контакта в Битрикс по contact_id, а затем обновляет его пользовательское поле UF_CRM_1737381798322.
     """
-    url = webhook_url + 'crm.contact.update'
+    url_update = webhook_url + 'crm.contact.update'
 
     # Получаем текущие данные контакта
     existing_contact_data = requests.get(webhook_url + f'crm.contact.get?id={contact_id}').json()
 
-    # Преобразуем название города в код, если город указан
-    if city == "astana":
-        city = "44"
-    elif city == "karaganda":
-        city = "46"
+    city_codes = {
+        "astana": "44",
+        "karaganda": "46"
+    }
+
+    city = city_codes.get(city, city)  # Преобразуем город в код, если он есть в словаре
 
     # Поля для обновления
     fields = {}
@@ -374,7 +387,6 @@ def update_contact(contact_id, name=None, personal_code=None, phone=None, city=N
     if city:
         fields['UF_CRM_1723542816833'] = city
 
-    # Проверяем, есть ли данные для обновления
     if not fields:
         print("Нет данных для обновления.")
         return None
@@ -385,18 +397,42 @@ def update_contact(contact_id, name=None, personal_code=None, phone=None, city=N
     }
 
     # Отправляем запрос на обновление данных
-    response = requests.post(url, json=params_contact)
+    response = requests.post(url_update, json=params_contact)
 
     if response.status_code == 200:
         result = response.json().get('result')
         if result:
             print(f"Контакт с ID {contact_id} успешно обновлен.")
+            update_contact_pickup(contact_id, pickup_point)  # Обновляем пользовательское поле отдельно
         else:
             print(f"Ошибка при обновлении контакта: {response.json().get('error_description')}")
     else:
         print(f"Ошибка при обновлении контакта: {response.status_code}")
         print(f"Ответ сервера: {response.text}")
 
+
+def update_contact_pickup(contact_id, pickup_point):
+    """
+    Отдельно обновляет пользовательское поле UF_CRM_1737381798322 у контакта.
+    """
+    url_userfield_update = webhook_url + 'crm.contact.userfield.update'
+
+    pickup_location = locations.get(pickup_point, "Неизвестный пункт")  # Получаем строковое значение
+
+    params_userfield = {
+        'id': contact_id,
+        'fields': {
+            'UF_CRM_1737381798322': pickup_location
+        }
+    }
+
+    response = requests.post(url_userfield_update, json=params_userfield)
+
+    if response.status_code == 200:
+        print(f"Пользовательское поле UF_CRM_1737381798322 у контакта {contact_id} успешно обновлено.")
+    else:
+        print(f"Ошибка при обновлении пользовательского поля: {response.status_code}")
+        print(f"Ответ сервера: {response.text}")
 
 async def update_contact_fields_in_bitrix(contact_id, sum_weight, sum_amount, order_count):
     """

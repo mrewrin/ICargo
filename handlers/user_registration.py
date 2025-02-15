@@ -151,7 +151,7 @@ async def process_pickup(callback: CallbackQuery, state: FSMContext):
     city = user_data.get('city')
     personal_code = generate_unique_code()
 
-    contact_id = create_contact(name_translit, personal_code, phone, city)
+    contact_id = create_contact(name_translit, personal_code, phone, city, pickup_point)
     await state.update_data(contact_id=contact_id)
     save_client_data(
         chat_id=chat_id,
