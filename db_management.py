@@ -1060,16 +1060,21 @@ def get_last_broadcast_messages():
     return messages
 
 
-def save_deal_history(deal_id, track_number, original_date_modify, stage_id):
+def save_deal_history(deal_id, track_number, original_date_modify, stage_id, china_shipment_date=None):
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
+
     cursor.execute("""
-        INSERT INTO deal_history (deal_id, track_number, original_date_modify, stage_id)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO deal_history (deal_id, track_number, original_date_modify, stage_id, china_shipment_date)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(track_number) DO UPDATE SET
             original_date_modify = excluded.original_date_modify,
             stage_id = excluded.stage_id
-    """, (deal_id, track_number, original_date_modify, stage_id))
+            {china_update}
+    """.format(china_update=", china_shipment_date = excluded.china_shipment_date" if china_shipment_date is None else ""),
+        (deal_id, track_number, original_date_modify, stage_id, china_shipment_date)
+    )
+
     conn.commit()
     conn.close()
 
@@ -1078,11 +1083,14 @@ def get_original_date_by_track(track_number):
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT original_date_modify, stage_id FROM deal_history WHERE track_number = ?
+        SELECT original_date_modify, stage_id, china_shipment_date 
+        FROM deal_history 
+        WHERE track_number = ?
     """, (track_number,))
     result = cursor.fetchone()
     conn.close()
-    return result
+    return result  # Теперь возвращает (original_date_modify, stage_id, china_shipment_date)
+
 
 
 def delete_client_from_db(phone):

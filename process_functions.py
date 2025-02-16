@@ -113,27 +113,36 @@ async def process_deal_add(deal_info, operations, unregistered_deals):
     # Получаем текущую запись из deal_history
     deal_history = get_original_date_by_track(track_number)
     if deal_history:
-        last_modified, saved_stage_id = deal_history
+        last_modified, saved_stage_id, china_shipment_date = deal_history
 
         # Если этап изменился, обновляем `deal_history`
         if saved_stage_id != stage_id:
             logging.info(f"Этап сделки изменился: {saved_stage_id} -> {stage_id}. Обновляем запись в deal_history.")
+
+            # Определяем значение для china_shipment_date (заполняем только при нужном этапе)
+            china_date = date_modify if stage_id == "C8:PREPARATION" and china_shipment_date is None else china_shipment_date
+
             save_deal_history(
                 deal_id=deal_id,
                 track_number=track_number,
                 original_date_modify=date_modify,  # Сохраняем новое значение DATE_MODIFY
-                stage_id=stage_id  # Сохраняем новый этап
+                stage_id=stage_id,  # Сохраняем новый этап
+                china_shipment_date=china_date  # Заполняем дату отгрузки только один раз
             )
         else:
             logging.info(f"Этап сделки не изменился. Обновление deal_history не требуется.")
     else:
         # Если записи в deal_history нет, создаём новую
         logging.info(f"Запись в deal_history отсутствует. Создаём новую запись.")
+
+        china_date = date_modify if stage_id == "C8:PREPARATION" else None
+
         save_deal_history(
             deal_id=deal_id,
             track_number=track_number,
             original_date_modify=date_modify,
-            stage_id=stage_id
+            stage_id=stage_id,
+            china_shipment_date=china_date
         )
 
     # Логика для альтернативной категории 8

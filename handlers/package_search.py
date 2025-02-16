@@ -22,7 +22,8 @@ def register_package_search_handlers(router_object):
     router_object.callback_query.register(process_tracking_search, F.data.in_({"tracking_view"}))
     router_object.callback_query.register(process_management_search, F.data.in_({"management_view"}))
     router_object.callback_query.register(handle_track_status, lambda callback: callback.data.startswith("backtrack_"))
-    router_object.callback_query.register(manage_single_track, lambda callback: callback.data.startswith("manage_single_track_"))
+    router_object.callback_query.register(manage_single_track,
+                                          lambda callback: callback.data.startswith("manage_single_track_"))
     router_object.callback_query.register(process_track_name_update, F.data.startswith("change_track_name_"))
     router_object.message.register(process_track_name_input, Track.track_name_update)
     router_object.callback_query.register(process_track_number_edit, F.data.startswith("edit_track_"))
@@ -111,9 +112,10 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
         # Получаем оригинальную дату изменения из локальной таблицы
         deal_history = get_original_date_by_track(track_number)
         if deal_history:
-            last_modified, stage_id = deal_history
+            last_modified, stage_id, china_shipment_date = deal_history
         else:
             last_modified = last_deal.get('DATE_MODIFY', 'Неизвестная дата')
+            china_shipment_date = None  # Добавляем инициализацию
         status_code_list = {
             "C8:NEW": "Добавлен в базу",
             "C8:PREPARATION": "Отгружен со склада Китая",
@@ -141,16 +143,27 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
                 f"{last_modified}"
             )
         else:
-            alert_text = (
-                f"📦 Информация о посылке:\n"
-                f"Название: {name_track}\n"
-                f"Трек номер: {track_number}\n"
-                f"Статус: {deal_status_text}\n"
-                f"{last_modified}"
-            )
+            if china_shipment_date:
+                china_shipment_date = datetime.fromisoformat(china_shipment_date).strftime("%H:%M %d.%m.%Y")
+                alert_text = (
+                    f"📦 Информация о посылке:\n"
+                    f"Название: {name_track}\n"
+                    f"Трек номер: {track_number}\n"
+                    f"Отгружен со склада Китая: {china_shipment_date}\n"
+                    f"Статус: {deal_status_text}\n"
+                    f"{last_modified}"
+                )
+            else:
+                alert_text = (
+                    f"📦 Информация о посылке:\n"
+                    f"Название: {name_track}\n"
+                    f"Трек номер: {track_number}\n"
+                    f"Статус: {deal_status_text}\n"
+                    f"{last_modified}"
+                )
 
-        # Кнопка для управления выбранным треком
-        keyboard = create_tracking_keyboard([(track_number, name_track)])
+        # # Кнопка для управления выбранным треком
+        # keyboard = create_tracking_keyboard([(track_number, name_track)])
         await callback.answer(alert_text, show_alert=True)
     else:
         await callback.answer("📦 Сделки с этим трек-номером не найдены.", show_alert=True)
@@ -176,7 +189,8 @@ async def manage_single_track(callback: CallbackQuery, state: FSMContext):
 async def process_track_name_update(callback: CallbackQuery, state: FSMContext):
     track_number = callback.data.split("_", maxsplit=3)[3]
     await state.update_data(track_number=track_number)
-    await send_and_delete_previous(callback.message, f"Введите новое название для трек-номера {track_number}:", state=state)
+    await send_and_delete_previous(callback.message, f"Введите новое название для трек-номера {track_number}:",
+                                   state=state)
     await state.set_state(Track.track_name_update)
 
 
