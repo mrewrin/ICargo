@@ -15,3 +15,4 @@ services:
 
 volumes:
   icargo_sqlite_data:
+    external: true  # <- Добавь эту строку, если volume уже существует
