@@ -14,4 +14,4 @@ services:
     user: "1000:1000"  # Запускаем контейнер от UID/GID 1000 (обычный пользователь в Linux)
 
 volumes:
-  sqlite_data:
+  icargo_sqlite_data:
