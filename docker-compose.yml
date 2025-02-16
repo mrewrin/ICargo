@@ -6,7 +6,7 @@ services:
     container_name: icargo
     restart: always
     volumes:
-      - sqlite_data:/data  # Храним базу данных в Volume
+      - icargo_sqlite_data:/data  # Храним базу данных в Volume
     env_file:
       - .env  # Загружаем переменные окружения из файла
     ports:
