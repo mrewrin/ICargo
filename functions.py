@@ -1,6 +1,8 @@
 import re
 import sqlite3
 import pandas as pd
+from config import DATABASE_PATH
+
 
 def transliterate(string):
     """
@@ -123,10 +125,9 @@ def generate_address_instructions(name_cyrillic, personal_code, name_translit, p
 
 
 def export_database_to_excel():
-    db_path = "clients.db"
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DATABASE_PATH)
 
-    table_name = "clients"  # Укажите имя вашей таблицы
+    table_name = "clients"
     query = f"SELECT * FROM {table_name}"
     df = pd.read_sql_query(query, conn)
 

@@ -1092,7 +1092,6 @@ def get_original_date_by_track(track_number):
     return result  # Теперь возвращает (original_date_modify, stage_id, china_shipment_date)
 
 
-
 def delete_client_from_db(phone):
     """
     Удаляет клиента из таблицы `clients` по номеру телефона.
