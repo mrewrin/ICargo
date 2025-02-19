@@ -131,7 +131,7 @@ def export_database_to_excel():
     query = f"SELECT * FROM {table_name}"
     df = pd.read_sql_query(query, conn)
 
-    output_file = "output.xlsx"
+    output_file = "/data/output.xlsx"
     df.to_excel(output_file, index=False, engine='openpyxl')
 
     conn.close()
