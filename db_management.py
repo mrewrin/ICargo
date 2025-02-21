@@ -1071,7 +1071,7 @@ def save_deal_history(deal_id, track_number, original_date_modify, stage_id, chi
             original_date_modify = excluded.original_date_modify,
             stage_id = excluded.stage_id
             {china_update}
-    """.format(china_update=", china_shipment_date = excluded.china_shipment_date" if china_shipment_date is None else ""),
+    """.format(china_update=", china_shipment_date = excluded.china_shipment_date" if china_shipment_date is not None else ""),
         (deal_id, track_number, original_date_modify, stage_id, china_shipment_date)
     )
 
