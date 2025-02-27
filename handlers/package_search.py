@@ -144,13 +144,24 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             )
         else:
             if china_shipment_date:
-                china_shipment_date = datetime.fromisoformat(china_shipment_date).strftime("%H:%M %d.%m.%Y")
+                formatted_china = datetime.fromisoformat(china_shipment_date).strftime("%H:%M %d.%m.%Y")
+            else:
+                formatted_china = None
+            # last_modified уже отформатирован (если не 'Неизвестная дата')
+            if formatted_china and formatted_china == last_modified:
                 alert_text = (
                     f"📦 Информация о посылке:\n"
                     f"Название: {name_track}\n"
                     f"Трек номер: {track_number}\n"
-                    f"Отгружен со склада Китая: {china_shipment_date}\n"
-                    f"Статус: {deal_status_text}\n"
+                    f"Отгружен со склада Китая: {formatted_china}\n"
+                )
+            elif formatted_china:
+                alert_text = (
+                    f"📦 Информация о посылке:\n"
+                    f"Название: {name_track}\n"
+                    f"Трек номер: {track_number}\n"
+                    f"🇨🇳 Отгружен со склада Китая: {formatted_china}\n"
+                    f"🇰🇿 Статус: {deal_status_text}\n"
                     f"{last_modified}"
                 )
             else:
