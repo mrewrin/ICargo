@@ -124,7 +124,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             "C6:NEW": "🎁 Прибыл в ПВ Астана ESIL",
             "C2:NEW": "🎁 Прибыл в ПВ Астана SARY-ARKA"
         }
-        deal_status_text = status_code_list.get(deal_status, "Упакован и ожидает выдачи")
+        deal_status_text = status_code_list.get(deal_status, "🎁 Упакован и ожидает выдачи")
         if last_modified != 'Неизвестная дата':
             last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
         name_track = get_name_track_by_track_number(track_number)
