@@ -139,7 +139,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
                 f"📦 Информация о посылке:\n"
                 f"Готовые к выдаче посылки:\n"
                 f"{ready_parcels_text}\n"  # Выводим только трек-номера
-                f"Статус: {deal_status_text}\n"
+                f"📑 Статус: {deal_status_text}\n"
                 f"{last_modified}"
             )
         else:
@@ -169,7 +169,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
                     f"📦 Информация о посылке:\n"
                     f"Название: {name_track}\n"
                     f"Трек номер: {track_number}\n"
-                    f"Статус: {deal_status_text}\n"
+                    f"📑 Статус: {deal_status_text}\n"
                     f"{last_modified}"
                 )
 
