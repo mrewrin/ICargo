@@ -153,7 +153,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
                     f"📦 Информация о посылке:\n"
                     f"Название: {name_track}\n"
                     f"Трек номер: {track_number}\n"
-                    f"Отгружен со склада Китая: {formatted_china}\n"
+                    f"🇨🇳 Отгружен со склада Китая: {formatted_china}\n"
                 )
             elif formatted_china:
                 alert_text = (
