@@ -958,19 +958,26 @@ def save_final_deal_to_db(contact_id, deal_id, creation_date, track_number, curr
     print(f"Сохранена новая итоговая сделка с ID {deal_id} для контакта {contact_id}")
 
 
-def update_final_deal_in_db(deal_id, track_numbers, stage_id):
+def update_final_deal_in_db(deal_id, track_numbers, stage_id, weight=None, amount=None, orders=None):
     """
     Обновляет информацию об итоговой сделке в таблице final_deals.
+    Если переданы значения weight, amount и orders – обновляет и их, иначе обновляет только track_numbers и stage_id.
     """
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
-    # Обновляем трек-номера и этап текущей сделки
-    cursor.execute("""
-        UPDATE final_deals
-        SET track_numbers = ?, current_stage_id = ?
-        WHERE final_deal_id = ?
-    """, (track_numbers, stage_id, deal_id))
+    if weight is not None and amount is not None and orders is not None:
+        cursor.execute("""
+            UPDATE final_deals
+            SET track_numbers = ?, current_stage_id = ?, total_weight = ?, total_amount = ?, number_of_orders = ?
+            WHERE final_deal_id = ?
+        """, (track_numbers, stage_id, weight, amount, orders, deal_id))
+    else:
+        cursor.execute("""
+            UPDATE final_deals
+            SET track_numbers = ?, current_stage_id = ?
+            WHERE final_deal_id = ?
+        """, (track_numbers, stage_id, deal_id))
 
     conn.commit()
     conn.close()

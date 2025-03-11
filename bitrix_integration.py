@@ -318,7 +318,7 @@ async def find_final_deal_for_contact(contact_id, exclude_deal_id=None):
 # Маппинг значений pickup_point
 locations = {
     'pv_astana_1': "ПВ Астана ESIL",
-    'pv_astana_2': "ПВ Астана SARY-ARKA",
+    'pv_astana_2': "ПВ Астана ALMATINSKIY",
     'pv_karaganda_1': "ПВ №1"
 }
 

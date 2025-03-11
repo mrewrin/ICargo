@@ -66,7 +66,7 @@ def create_pickup_keyboard(city):
     pickup_keyboard = InlineKeyboardBuilder()
     if city == 'astana':
         pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана-Есиль", callback_data="pv_astana_1"))
-        pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана-Сарыарка", callback_data="pv_astana_2"))
+        pickup_keyboard.add(InlineKeyboardButton(text="ПВ Астана-Алматинский", callback_data="pv_astana_2"))
     # elif city == 'karaganda':
     #     pickup_keyboard.add(InlineKeyboardButton(text="ПВ Караганда №1", callback_data="pv_karaganda_1"))
         # pickup_keyboard.add(InlineKeyboardButton(text="ПВ Караганда №2", callback_data="pv_karaganda_2"))

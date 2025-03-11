@@ -122,7 +122,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             "C8:PREPAYMENT_INVOICE": "🇰🇿 Прибыл в Алмату",
             "C4:NEW": "🎁 Прибыл в ПВ№1 г.Караганда",
             "C6:NEW": "🎁 Прибыл в ПВ Астана ESIL",
-            "C2:NEW": "🎁 Прибыл в ПВ Астана SARY-ARKA"
+            "C2:NEW": "🎁 Прибыл в ПВ Астана ALMATINSKIY"
         }
         deal_status_text = status_code_list.get(deal_status, "🎁 Упакован и ожидает выдачи")
         if last_modified != 'Неизвестная дата':
