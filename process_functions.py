@@ -36,7 +36,7 @@ pickup_points = {
     "pv_karaganda_1": "Караганда 1",
     "pv_karaganda_2": "Караганда 2",
     "pv_astana_1": "Астана ESIL",
-    "pv_astana_2": "Астана SARY-ARKA"
+    "pv_astana_2": "Астана ALMATINSKIY"
 }
 
 
@@ -1305,6 +1305,7 @@ async def _update_existing_final_deal(
             number_of_orders=new_orders,
             track_number=updated_track_numbers
         )
+        ops_builder.add_update_contact_fields(client_info['contact_id'], new_weight, new_amount, new_orders)
         # Обновляем данные в базе с дополнительными значениями
         update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers,
                                 final_deal['current_stage_id'],
@@ -1345,7 +1346,7 @@ async def _update_current_deal_as_final(
     amount = deal_info.get('OPPORTUNITY', 0)
     number_of_orders = deal_info.get('UF_CRM_1730185262', 0)
     today_date = datetime.now(timezone.utc).date()
-
+    logging.info(f'{pipeline_stage}')
     pickup_mapping: Dict[str, str] = {
         "pv_karaganda_1": "52",
         "pv_karaganda_2": "54",
@@ -1376,6 +1377,7 @@ async def _update_current_deal_as_final(
     ops_builder.add_create_copy_of_deal(contact_id, client_info, archive_stage_id, category_id, pickup_point_mapped,
                                         client_info['chat_id'], track_number)
     logging.info(f"Создание копии сделки добавлено в операции: {deal_id}.")
+    logging.info(f"{stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup')}")
     save_final_deal_to_db(
         contact_id=contact_id,
         deal_id=deal_id,
