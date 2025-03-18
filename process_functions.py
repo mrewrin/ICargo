@@ -1077,6 +1077,7 @@ async def _process_existing_pickup(
     deal_id: Optional[int] = deal_info.get('ID')
     track_number: str = deal_info.get('UF_CRM_1723542556619', '')
     chat_id: Optional[str] = track_data.get('chat_id')
+    contact_id = deal_info.get('CONTACT_ID')
     logging.info(f"Найдены данные по трек-номеру {track_number}: {track_data}")
 
     try:
@@ -1087,7 +1088,6 @@ async def _process_existing_pickup(
 
     if not client_info:
         # Фоллбэк: если client_info не получен через chat_id, пробуем получить по contact_id
-        contact_id = deal_info.get('CONTACT_ID')
         logging.info(f"Клиент не найден по chat_id {chat_id}. Попытка получения данных по contact_id {contact_id}.")
         client_info = get_client_by_contact_id(contact_id)
         if not client_info:
@@ -1120,12 +1120,11 @@ async def _process_existing_pickup(
     else:
         logging.info(f"Дубликаты для трек-номера {track_number} не найдены.")
 
-    if chat_id != str(expected_contact_id):
+    if contact_id != str(expected_contact_id):
         logging.info(
-            f"Контакт ID {chat_id} отличается от ожидаемого {expected_contact_id}. Создание операции по отвязке.")
-        ops_builder.operations[f"detach_contact_{deal_id}"] = f"crm.deal.contact.items.delete?ID={deal_id}&CONTACT_ID={chat_id}"
-        chat_id = str(expected_contact_id)
-        logging.info(f"Контакт успешно перепривязан к ID {chat_id}.")
+            f"Контакт ID {contact_id} отличается от ожидаемого {expected_contact_id}. Создание операции по отвязке.")
+        ops_builder.operations[f"detach_contact_{deal_id}"] = f"crm.deal.contact.items.delete?ID={deal_id}&CONTACT_ID={contact_id}"
+        logging.info(f"Контакт успешно перепривязан к ID {contact_id}.")
 
     title = f"{client_info['personal_code']} {client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
     logging.info(f"Обновление сделки ID {deal_id}: новый заголовок: {title}")
@@ -1285,9 +1284,9 @@ async def _update_existing_final_deal(
     archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
 
     if (weight, amount, number_of_orders) != (final_weight, final_amount, final_orders):
-        new_weight = final_weight + weight
-        new_amount = final_amount + amount
-        new_orders = final_orders + number_of_orders
+        new_weight = float(final_weight) + float(weight)
+        new_amount = float(final_amount) + float(amount)
+        new_orders = float(final_orders) + float(number_of_orders)
         logging.info(
             f"Обновление итоговой сделки: суммирование данных - вес: {final_weight} + {weight} = {new_weight}, "
             f"сумма: {final_amount} + {amount} = {new_amount}, заказы: {final_orders} + {number_of_orders} = {new_orders}"
@@ -1300,9 +1299,9 @@ async def _update_existing_final_deal(
             expected_awaiting_pickup_stage=stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup'),
             category_id=final_deal.get('category_id', 0),
             pickup_point_mapped=pickup_point_mapped,
-            weight=new_weight,
-            amount=new_amount,
-            number_of_orders=new_orders,
+            weight=str(new_weight),
+            amount=str(new_amount),
+            number_of_orders=str(new_orders),
             track_number=updated_track_numbers
         )
         ops_builder.add_update_contact_fields(client_info['contact_id'], new_weight, new_amount, new_orders)
@@ -1430,25 +1429,25 @@ async def process_deal_add(
     else:
         await process_pickup_pipelines(deal_info, operations, unregistered_deals)
 
-    # 4. Обработка итоговой сделки
-    pipeline_stage = {
-        6: 'ПВ Астана №1',
-        2: 'ПВ Астана №2',
-        4: 'ПВ Караганда №1'
-    }.get(int(category_id))
-    client_info = None
-    chat_id = get_chat_id_by_contact_id(precheck['contact_id'])
-    if chat_id:
-        client_info = get_client_by_chat_id(chat_id)
-    if not client_info and precheck['contact_id']:
-        logging.info(f"Попытка получения данных клиента по contact_id {precheck['contact_id']}")
-        client_info = get_client_by_contact_id(precheck['contact_id'])
-    if not client_info:
-        logging.error(f"Клиентская информация не найдена для contact_id {precheck['contact_id']}. Пропуск обработки.")
-        return
-    final_ops_builder = OperationsBuilder()
-    await process_final_deal(deal_info, client_info, pipeline_stage, final_ops_builder)
-    operations.update(final_ops_builder.operations)
+        # 4. Обработка итоговой сделки
+        pipeline_stage = {
+            6: 'ПВ Астана №1',
+            2: 'ПВ Астана №2',
+            4: 'ПВ Караганда №1'
+        }.get(int(category_id))
+        client_info = None
+        chat_id = get_chat_id_by_contact_id(precheck['contact_id'])
+        if chat_id:
+            client_info = get_client_by_chat_id(chat_id)
+        if not client_info and precheck['contact_id']:
+            logging.info(f"Попытка получения данных клиента по contact_id {precheck['contact_id']}")
+            client_info = get_client_by_contact_id(precheck['contact_id'])
+        if not client_info:
+            logging.error(f"Клиентская информация не найдена для contact_id {precheck['contact_id']}. Пропуск обработки.")
+            return
+        final_ops_builder = OperationsBuilder()
+        await process_final_deal(deal_info, client_info, pipeline_stage, final_ops_builder)
+        operations.update(final_ops_builder.operations)
 
     # Результатом работы функции является обновленный словарь operations,
     # который позже используется для отправки batch‑запросов.
