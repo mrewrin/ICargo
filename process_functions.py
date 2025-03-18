@@ -1283,7 +1283,8 @@ async def _update_existing_final_deal(
     pickup_point_mapped = pickup_mapping.get(client_info['pickup_point'], "неизвестно")
     archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
 
-    if (weight, amount, number_of_orders) != (final_weight, final_amount, final_orders):
+    if (float(weight), float(amount), int(number_of_orders)) != (
+            float(final_weight), float(final_amount), int(final_orders)):
         new_weight = float(final_weight) + float(weight)
         new_amount = float(final_amount) + float(amount)
         new_orders = float(final_orders) + float(number_of_orders)
@@ -1299,12 +1300,12 @@ async def _update_existing_final_deal(
             expected_awaiting_pickup_stage=stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup'),
             category_id=final_deal.get('category_id', 0),
             pickup_point_mapped=pickup_point_mapped,
-            weight=str(new_weight),
-            amount=str(new_amount),
-            number_of_orders=str(new_orders),
+            weight=float(new_weight),
+            amount=float(new_amount),
+            number_of_orders=int(new_orders),
             track_number=updated_track_numbers
         )
-        ops_builder.add_update_contact_fields(client_info['contact_id'], new_weight, new_amount, new_orders)
+        ops_builder.add_update_contact_fields(client_info['contact_id'], str(new_weight), float(new_amount), int(new_orders))
         # Обновляем данные в базе с дополнительными значениями
         update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers,
                                 final_deal['current_stage_id'],
