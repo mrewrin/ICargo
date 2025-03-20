@@ -741,6 +741,26 @@ class OperationsBuilder:
             f"&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
         )
 
+    def add_update_existing_final_deal(self, final_deal_id: int, client_info: Dict[str, Any], contact_id: str,
+                                       expected_awaiting_pickup_stage: str, category_id: int,
+                                       pickup_point_mapped: str, weight: Any, amount: Any,
+                                       number_of_orders: Any, track_number: str) -> None:
+        """
+        Добавляет операцию обновления уже существующей итоговой сделки.
+        Использует final_deal_id (ID итоговой сделки из базы данных).
+        """
+        title = (f"Итоговая сделка: {client_info['personal_code']} {client_info['name_translit']} "
+                 f"{client_info['pickup_point']} +{client_info['phone']}")
+        key = f"update_existing_final_deal_{final_deal_id}"
+        self.operations[key] = (
+            f"crm.deal.update?ID={final_deal_id}&fields[TITLE]={title}"
+            f"&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
+            f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
+            f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}"
+            f"&fields[UF_CRM_1730185262]={number_of_orders}&fields[UF_CRM_1729115312]={track_number}"
+            f"&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
+        )
+
     def add_create_copy_of_deal(self, contact_id: str, client_info: Dict[str, Any], stage_id: str,
                                 category_id: int, pickup_point_mapped: str, chat_id: str,
                                 track_number: str) -> None:
@@ -759,6 +779,16 @@ class OperationsBuilder:
             f"&fields[UF_CRM_1725179625]={chat_id}&fields[UF_CRM_1723542556619]={track_number}"
             f"&fields[UF_CRM_1729539412]=1"
         )
+
+    def add_archive_deal(self, deal_id: int, pipeline_stage: Dict[str, Any]) -> None:
+        """
+        Добавляет операцию перемещения сделки с указанным deal_id в архив.
+        Использует маппинг pipeline_stage для определения архивной стадии.
+        """
+        archive_stage_id = pipeline_stage.get('archive', 'LOSE')
+        key = f"archive_deal_{deal_id}"
+        self.operations[key] = f"crm.deal.update?ID={deal_id}&fields[STAGE_ID]={archive_stage_id}"
+        logging.info(f"Операция для перемещения сделки {deal_id} в архив добавлена в OperationsBuilder.")
 
     def add_update_deal_title(self, deal_id: int, incorrect_title: str) -> None:
         """
@@ -1266,6 +1296,7 @@ async def _update_existing_final_deal(
     )
 
     # Обновляем только трек‑номера, если агрегированные данные не изменились
+    final_deal_id = final_deal.get('final_deal_id')
     final_weight = final_deal.get('total_weight', 0)
     final_amount = final_deal.get('total_amount', 0)
     final_orders = final_deal.get('number_of_orders', 0)
@@ -1293,8 +1324,8 @@ async def _update_existing_final_deal(
             f"сумма: {final_amount} + {amount} = {new_amount}, заказы: {final_orders} + {number_of_orders} = {new_orders}"
         )
         # Обновляем итоговую сделку, включая поля веса, суммы и количества заказов
-        ops_builder.add_update_deal_as_final(
-            deal_id=deal_id,
+        ops_builder.add_update_existing_final_deal(
+            deal_id=final_deal_id,
             client_info=client_info,
             contact_id=client_info['contact_id'],
             expected_awaiting_pickup_stage=stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup'),
@@ -1310,11 +1341,15 @@ async def _update_existing_final_deal(
         update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers,
                                 final_deal['current_stage_id'],
                                 weight=new_weight, amount=new_amount, orders=new_orders)
+
     else:
         # Если значения совпадают, обновляем только список трек‑номеров
         ops_builder.add_update_track_numbers(final_deal['final_deal_id'], updated_track_numbers)
         update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers, final_deal['current_stage_id'])
 
+    # После обновления итоговой сделки архивируем текущую сделку
+    ops_builder.add_archive_deal(deal_id, archive_stage_id)
+    logging.info(f"Добавлена операция архивации текущей обрабатываемой сделки {deal_id}")
     logging.info(f"Попытка удаления сделки с трек-номером {track_number} из базы данных.")
     delete_result = await delete_deal_by_track_number(track_number)
     if delete_result:
