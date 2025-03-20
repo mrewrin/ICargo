@@ -749,6 +749,7 @@ class OperationsBuilder:
         Добавляет операцию обновления уже существующей итоговой сделки.
         Использует final_deal_id (ID итоговой сделки из базы данных).
         """
+        logging.info('Вызван метод add_update_existing_final_deal')
         title = (f"Итоговая сделка: {client_info['personal_code']} {client_info['name_translit']} "
                  f"{client_info['pickup_point']} +{client_info['phone']}")
         key = f"update_existing_final_deal_{final_deal_id}"
@@ -1283,27 +1284,38 @@ async def _update_existing_final_deal(
     Обновляет существующую итоговую сделку:
       - Обновляет список трек-номеров в итоговой сделке.
       - Если значения веса, суммы и количества заказов отличаются – суммирует их с новыми и
-        вызывает метод add_update_deal_as_final для обновления всех полей.
+        вызывает метод обновления итоговой сделки.
       - Если значения совпадают – обновляет только список трек‑номеров.
       - Затем обновляет запись в базе и удаляет сделку по track_number.
     """
+    logging.debug(f"Тип deal_info: {type(deal_info)}; содержимое: {deal_info}")
+    logging.debug(f"Тип final_deal: {type(final_deal)}; содержимое: {final_deal}")
+    logging.debug(f"Тип client_info: {type(client_info)}; содержимое: {client_info}")
+
     deal_id: Optional[int] = deal_info.get('ID')
     track_number: str = deal_info.get('UF_CRM_1723542556619', '')
+    logging.debug(f"deal_id: {deal_id}, track_number: {track_number}")
+
     current_track_numbers = final_deal.get('track_numbers', '')
     updated_track_numbers = (
         f"{current_track_numbers}, {track_number}".strip(', ')
         if current_track_numbers else track_number
     )
+    logging.debug(f"current_track_numbers: {current_track_numbers}, updated_track_numbers: {updated_track_numbers}")
 
-    # Обновляем только трек‑номера, если агрегированные данные не изменились
+    # Получаем данные итоговой сделки
     final_deal_id = final_deal.get('final_deal_id')
     final_weight = final_deal.get('total_weight', 0)
     final_amount = final_deal.get('total_amount', 0)
     final_orders = final_deal.get('number_of_orders', 0)
+    logging.debug(
+        f"final_deal_id: {final_deal_id}, final_weight: {final_weight}, final_amount: {final_amount}, final_orders: {final_orders}")
 
+    # Данные из текущей сделки
     weight = deal_info.get('UF_CRM_1727870320443', 0)
     amount = deal_info.get('OPPORTUNITY', 0)
     number_of_orders = deal_info.get('UF_CRM_1730185262', 0)
+    logging.debug(f"weight: {weight}, amount: {amount}, number_of_orders: {number_of_orders}")
 
     pickup_mapping = {
         "pv_karaganda_1": "52",
@@ -1312,8 +1324,13 @@ async def _update_existing_final_deal(
         "pv_astana_2": "50"
     }
     pickup_point_mapped = pickup_mapping.get(client_info['pickup_point'], "неизвестно")
-    archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
+    logging.debug(
+        f"client_info['pickup_point']: {client_info.get('pickup_point')}, pickup_point_mapped: {pickup_point_mapped}")
 
+    archive_stage_id = stage_mapping.get(pipeline_stage, {}).get('archive', 'LOSE')
+    logging.debug(f"pipeline_stage: {pipeline_stage}, archive_stage_id: {archive_stage_id}")
+
+    # Сравниваем агрегированные значения
     if (float(weight), float(amount), int(number_of_orders)) != (
             float(final_weight), float(final_amount), int(final_orders)):
         new_weight = float(final_weight) + float(weight)
@@ -1323,7 +1340,7 @@ async def _update_existing_final_deal(
             f"Обновление итоговой сделки: суммирование данных - вес: {final_weight} + {weight} = {new_weight}, "
             f"сумма: {final_amount} + {amount} = {new_amount}, заказы: {final_orders} + {number_of_orders} = {new_orders}"
         )
-        # Обновляем итоговую сделку, включая поля веса, суммы и количества заказов
+        logging.debug(f"Обновление существующей итоговой сделки с final_deal_id: {final_deal_id}")
         ops_builder.add_update_existing_final_deal(
             final_deal_id=final_deal_id,
             client_info=client_info,
@@ -1336,20 +1353,24 @@ async def _update_existing_final_deal(
             number_of_orders=int(new_orders),
             track_number=updated_track_numbers
         )
-        ops_builder.add_update_contact_fields(client_info['contact_id'], str(new_weight), float(new_amount), int(new_orders))
-        # Обновляем данные в базе с дополнительными значениями
+        logging.debug("Операция обновления итоговой сделки добавлена.")
+        ops_builder.add_update_contact_fields(client_info['contact_id'], str(new_weight), float(new_amount),
+                                              int(new_orders))
+        logging.debug("Операция обновления данных контакта добавлена.")
         update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers,
                                 final_deal['current_stage_id'],
                                 weight=new_weight, amount=new_amount, orders=new_orders)
-
+        logging.info("Локальная запись итоговой сделки обновлена новыми агрегированными значениями.")
     else:
-        # Если значения совпадают, обновляем только список трек‑номеров
+        logging.info("Агрегированные значения не изменились. Обновляем только список трек‑номеров.")
         ops_builder.add_update_track_numbers(final_deal['final_deal_id'], updated_track_numbers)
         update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers, final_deal['current_stage_id'])
+        logging.info("Локальная запись итоговой сделки обновлена списком трек‑номеров.")
 
-    # После обновления итоговой сделки архивируем текущую сделку
+    # Архивируем текущую сделку
     ops_builder.add_archive_deal(deal_id, archive_stage_id)
     logging.info(f"Добавлена операция архивации текущей обрабатываемой сделки {deal_id}")
+
     logging.info(f"Попытка удаления сделки с трек-номером {track_number} из базы данных.")
     delete_result = await delete_deal_by_track_number(track_number)
     if delete_result:
