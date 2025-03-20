@@ -1325,7 +1325,7 @@ async def _update_existing_final_deal(
         )
         # Обновляем итоговую сделку, включая поля веса, суммы и количества заказов
         ops_builder.add_update_existing_final_deal(
-            deal_id=final_deal_id,
+            final_deal_id=final_deal_id,
             client_info=client_info,
             contact_id=client_info['contact_id'],
             expected_awaiting_pickup_stage=stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup'),
