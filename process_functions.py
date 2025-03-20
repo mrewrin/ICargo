@@ -781,15 +781,13 @@ class OperationsBuilder:
             f"&fields[UF_CRM_1729539412]=1"
         )
 
-    def add_archive_deal(self, deal_id: int, pipeline_stage: Dict[str, Any]) -> None:
+    def add_archive_deal(self, deal_id: int, archive_stage_id: str) -> None:
         """
-        Добавляет операцию перемещения сделки с указанным deal_id в архив.
-        Использует маппинг pipeline_stage для определения архивной стадии.
+        Добавляет операцию архивирования сделки с заданным deal_id, устанавливая стадию равной archive_stage_id.
         """
-        archive_stage_id = pipeline_stage.get('archive', 'LOSE')
         key = f"archive_deal_{deal_id}"
         self.operations[key] = f"crm.deal.update?ID={deal_id}&fields[STAGE_ID]={archive_stage_id}"
-        logging.info(f"Операция для перемещения сделки {deal_id} в архив добавлена в OperationsBuilder.")
+        logging.info(f"Операция для архивирования сделки {deal_id} добавлена.")
 
     def add_update_deal_title(self, deal_id: int, incorrect_title: str) -> None:
         """
