@@ -68,8 +68,10 @@ async def set_bot_commands():
         BotCommand(command="/delete_client", description="Удалить клиента по номеру телефона "
                                                          "(ввести /delete_client {номер_телефона})"),
         BotCommand(command="/export_db", description="Выгрузить базу данных в Excel"),
-        BotCommand(command="/get_final_deals", description="Получить итоговые сделки по contact_id"),
-        BotCommand(command="/delete_final_deal", description="Удалить итоговую сделку по final_deal_id"),
+        BotCommand(command="/get_final_deals", description="Получить итоговые сделки по contact_id, "
+                                                           "(ввести /get_final_deals {ID контакта из битрикс})"),
+        BotCommand(command="/delete_final_deal", description="Удалить итоговую сделку по final_deal_id"
+                                                             "(ввести /delete_final_deal {ID итоговой сделки из битрикс})"),
     ]
     for admin_id in ADMIN_IDS:
         await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))

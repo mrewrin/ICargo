@@ -51,13 +51,13 @@ async def send_notification_if_required(deal_info, chat_id, track_number, pickup
     # Определяем соответствующие пункты выдачи и стадии для уведомления
     locations = {
         'pv_astana_1': "г.Астана, ПВ Астана ESIL",
-        'pv_astana_2': "г.Астана, ПВ Астана SARY-ARKA",
+        'pv_astana_2': "г.Астана, ПВ Астана ALMATINSKY",
         'pv_karaganda_1': "г.Караганда, ПВ №1"
     }
     status_code_list = {
         "C4:NEW": "г.Караганда, ПВ №1",
         "C6:NEW": "г.Астана, ПВ Астана ESIL",
-        "C2:NEW": "г.Астана, ПВ Астана SARY-ARKA"
+        "C2:NEW": "г.Астана, ПВ Астана SARY-ALMATINSKY"
     }
     location_value = locations.get(pickup_point, "неизвестное место выдачи")
     stage_value = status_code_list.get(stage_id)
