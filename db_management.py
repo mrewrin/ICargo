@@ -1003,6 +1003,53 @@ def update_final_deal_id(contact_id, timestamp, new_deal_id):
     logging.info(f"Обновлен final_deal_id для контакта {contact_id} на {new_deal_id}")
 
 
+def get_all_final_deals_by_contact_id(contact_id):
+    """
+    Извлекает все итоговые сделки для заданного contact_id из таблицы final_deals.
+    Возвращает список словарей.
+    """
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, contact_id, final_deal_id, creation_date, current_stage_id, track_numbers, total_weight, total_amount, number_of_orders
+        FROM final_deals
+        WHERE contact_id = ?
+        ORDER BY creation_date DESC
+    """, (contact_id,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    deals = []
+    for row in rows:
+        deals.append({
+            "id": row[0],
+            "contact_id": row[1],
+            "final_deal_id": row[2],
+            "creation_date": row[3],
+            "current_stage_id": row[4],
+            "track_numbers": row[5],
+            "total_weight": row[6],
+            "total_amount": row[7],
+            "number_of_orders": row[8]
+        })
+    return deals
+
+
+def delete_final_deal_from_db(final_deal_id):
+    """
+    Удаляет итоговую сделку из таблицы final_deals по final_deal_id.
+    Возвращает True, если удаление прошло успешно, иначе False.
+    """
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM final_deals WHERE final_deal_id = ?", (final_deal_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
+
+
+
 # Функция для сохранения TASK_ID в базу данных
 def save_task_to_db(deal_id, task_id):
     conn = sqlite3.connect(DATABASE_PATH)

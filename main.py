@@ -13,7 +13,7 @@ from batch_processing import batch_send_to_bitrix
 from db_management import init_db, get_all_chat_ids, is_vip_code_available, update_personal_code, \
     remove_vip_code, get_contact_id_by_code, save_webhook_to_db, save_broadcast_message, get_last_broadcast_messages, \
     get_unprocessed_webhooks, is_code_used_by_another_client, get_chat_id_by_personal_code, \
-    delete_deal_by_track_number, delete_client_from_db
+    delete_deal_by_track_number, delete_client_from_db, get_all_final_deals_by_contact_id, delete_final_deal_from_db
 from bitrix_integration import update_contact_code_in_bitrix, get_deal_info, get_deals_by_track_ident, delete_deal
 from aiogram.filters import Command
 from aiogram.types import Message, BotCommand, BotCommandScopeDefault, BotCommandScopeChat, FSInputFile
@@ -68,7 +68,9 @@ async def set_bot_commands():
         BotCommand(command="/delete_client", description="Удалить клиента по номеру телефона "
                                                          "(ввести /delete_client {номер_телефона})"),
         BotCommand(command="/export_db", description="Выгрузить базу данных в Excel"),
-        ]
+        BotCommand(command="/get_final_deals", description="Получить итоговые сделки по contact_id"),
+        BotCommand(command="/delete_final_deal", description="Удалить итоговую сделку по final_deal_id"),
+    ]
     for admin_id in ADMIN_IDS:
         await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))
 
@@ -381,6 +383,58 @@ async def export_database(message: Message):
     except Exception as e:
         await message.answer(f"⚠ Ошибка при выгрузке базы данных: {e}")
 
+
+@dp.message(Command("get_final_deals"))
+async def get_final_deals_command(message: Message):
+    """
+    Команда для получения всех итоговых сделок по contact_id.
+    Формат команды: /get_final_deals {contact_id}
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("У вас нет прав для выполнения этой команды.")
+        return
+
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.answer("Укажите contact_id. Пример: /get_final_deals 12345")
+        return
+
+    contact_id = command_parts[1].strip()
+    deals = get_all_final_deals_by_contact_id(contact_id)
+    if deals:
+        response = f"Итоговые сделки для contact_id {contact_id}:\n"
+        for deal in deals:
+            response += (
+                f"ID: {deal['id']}, final_deal_id: {deal['final_deal_id']}, "
+                f"creation_date: {deal['creation_date']}, stage: {deal['current_stage_id']}, "
+                f"track_numbers: {deal['track_numbers']}, вес: {deal['total_weight']}, "
+                f"сумма: {deal['total_amount']}, заказы: {deal['number_of_orders']}\n"
+            )
+        await message.answer(response)
+    else:
+        await message.answer(f"Итоговые сделки для contact_id {contact_id} не найдены.")
+
+
+@dp.message(Command("delete_final_deal"))
+async def delete_final_deal_command(message: Message):
+    """
+    Команда для удаления итоговой сделки из таблицы final_deals по final_deal_id.
+    Формат команды: /delete_final_deal {final_deal_id}
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("У вас нет прав для выполнения этой команды.")
+        return
+
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.answer("Укажите final_deal_id для удаления. Пример: /delete_final_deal 12345")
+        return
+
+    final_deal_id = command_parts[1].strip()
+    if delete_final_deal_from_db(final_deal_id):
+        await message.answer(f"Итоговая сделка с final_deal_id {final_deal_id} успешно удалена.")
+    else:
+        await message.answer(f"Итоговая сделка с final_deal_id {final_deal_id} не найдена.")
 # ========== Запуск сервисов ==========
 
 
