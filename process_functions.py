@@ -1299,6 +1299,8 @@ async def _update_existing_final_deal(
         f"{current_track_numbers}, {track_number}".strip(', ')
         if current_track_numbers else track_number
     )
+    # Получаем список трек-номеров из текущего агрегированного поля
+    track_list = [t.strip() for t in updated_track_numbers.split(',') if t.strip()]
     logging.debug(f"current_track_numbers: {current_track_numbers}, updated_track_numbers: {updated_track_numbers}")
 
     # Получаем данные итоговой сделки
@@ -1334,31 +1336,38 @@ async def _update_existing_final_deal(
         new_weight = float(final_weight) + float(weight)
         new_amount = float(final_amount) + float(amount)
         new_orders = float(final_orders) + float(number_of_orders)
-        logging.info(
-            f"Обновление итоговой сделки: суммирование данных - вес: {final_weight} + {weight} = {new_weight}, "
-            f"сумма: {final_amount} + {amount} = {new_amount}, заказы: {final_orders} + {number_of_orders} = {new_orders}"
-        )
-        logging.debug(f"Обновление существующей итоговой сделки с final_deal_id: {final_deal_id}")
-        ops_builder.add_update_existing_final_deal(
-            final_deal_id=final_deal_id,
-            client_info=client_info,
-            contact_id=client_info['contact_id'],
-            expected_awaiting_pickup_stage=stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup'),
-            category_id=final_deal.get('category_id', 0),
-            pickup_point_mapped=pickup_point_mapped,
-            weight=float(new_weight),
-            amount=float(new_amount),
-            number_of_orders=int(new_orders),
-            track_number=updated_track_numbers
-        )
-        logging.debug("Операция обновления итоговой сделки добавлена.")
-        ops_builder.add_update_contact_fields(client_info['contact_id'], str(new_weight), float(new_amount),
-                                              int(new_orders))
-        logging.debug("Операция обновления данных контакта добавлена.")
-        update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers,
-                                final_deal['current_stage_id'],
-                                weight=new_weight, amount=new_amount, orders=new_orders)
-        logging.info("Локальная запись итоговой сделки обновлена новыми агрегированными значениями.")
+
+        if int(len(track_list)) != int(new_orders):
+            logging.info("Агрегированные значения не изменились. Обновляем только список трек‑номеров.")
+            ops_builder.add_update_track_numbers(final_deal['final_deal_id'], updated_track_numbers)
+            update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers, final_deal['current_stage_id'])
+            logging.info("Локальная запись итоговой сделки обновлена списком трек‑номеров.")
+        else:
+            logging.info(
+                f"Обновление итоговой сделки: суммирование данных - вес: {final_weight} + {weight} = {new_weight}, "
+                f"сумма: {final_amount} + {amount} = {new_amount}, заказы: {final_orders} + {number_of_orders} = {new_orders}"
+            )
+            logging.debug(f"Обновление существующей итоговой сделки с final_deal_id: {final_deal_id}")
+            ops_builder.add_update_existing_final_deal(
+                final_deal_id=final_deal_id,
+                client_info=client_info,
+                contact_id=client_info['contact_id'],
+                expected_awaiting_pickup_stage=stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup'),
+                category_id=final_deal.get('category_id', 0),
+                pickup_point_mapped=pickup_point_mapped,
+                weight=float(new_weight),
+                amount=float(new_amount),
+                number_of_orders=int(new_orders),
+                track_number=updated_track_numbers
+            )
+            logging.debug("Операция обновления итоговой сделки добавлена.")
+            ops_builder.add_update_contact_fields(client_info['contact_id'], str(new_weight), float(new_amount),
+                                                  int(new_orders))
+            logging.debug("Операция обновления данных контакта добавлена.")
+            update_final_deal_in_db(final_deal['final_deal_id'], updated_track_numbers,
+                                    final_deal['current_stage_id'],
+                                    weight=new_weight, amount=new_amount, orders=new_orders)
+            logging.info("Локальная запись итоговой сделки обновлена новыми агрегированными значениями.")
     else:
         logging.info("Агрегированные значения не изменились. Обновляем только список трек‑номеров.")
         ops_builder.add_update_track_numbers(final_deal['final_deal_id'], updated_track_numbers)
