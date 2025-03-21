@@ -57,7 +57,7 @@ async def send_notification_if_required(deal_info, chat_id, track_number, pickup
     status_code_list = {
         "C4:NEW": "г.Караганда, ПВ №1",
         "C6:NEW": "г.Астана, ПВ Астана ESIL",
-        "C2:NEW": "г.Астана, ПВ Астана SARY-ALMATINSKY"
+        "C2:NEW": "г.Астана, ПВ Астана ALMATINSKY"
     }
     location_value = locations.get(pickup_point, "неизвестное место выдачи")
     stage_value = status_code_list.get(stage_id)
@@ -1561,7 +1561,7 @@ async def process_contact_update(contact_info):
         number_of_orders = contact_info.get('UF_CRM_1730182877')
         locations = {
             'pv_astana_1': "г.Астана, ПВ Астана ESIL",
-            'pv_astana_2': "г.Астана, ПВ Астана SARY-ARKA",
+            'pv_astana_2': "г.Астана, ПВ Астана ALMATINSKY",
             'pv_karaganda_1': "г.Караганда, ПВ №1"
         }
         location = locations.get(client_data['pickup_point'])
