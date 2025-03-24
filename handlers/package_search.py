@@ -120,7 +120,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             "C8:NEW": "📑 Добавлен в базу",
             "C8:PREPARATION": "🇨🇳 Отгружен со склада Китая",
             "C8:PREPAYMENT_INVOICE": "🇰🇿 Прибыл в Алмату",
-            "C4:NEW": "🎁 Прибыл в ПВ№1 г.Караганда",
+            "C4:NEW": "🎁 Прибыл в ПВ Караганда UG",
             "C6:NEW": "🎁 Прибыл в ПВ Астана ESIL",
             "C2:NEW": "🎁 Прибыл в ПВ Астана ALMATINSKIY"
         }

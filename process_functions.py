@@ -33,7 +33,7 @@ stage_mapping = {
 }
 
 pickup_points = {
-    "pv_karaganda_1": "Караганда 1",
+    "pv_karaganda_1": "Караганда UG",
     "pv_karaganda_2": "Караганда 2",
     "pv_astana_1": "Астана ESIL",
     "pv_astana_2": "Астана ALMATINSKIY"
@@ -52,10 +52,10 @@ async def send_notification_if_required(deal_info, chat_id, track_number, pickup
     locations = {
         'pv_astana_1': "г.Астана, ПВ Астана ESIL",
         'pv_astana_2': "г.Астана, ПВ Астана ALMATINSKY",
-        'pv_karaganda_1': "г.Караганда, ПВ №1"
+        'pv_karaganda_1': "г.Караганда, ПВ Караганда UG"
     }
     status_code_list = {
-        "C4:NEW": "г.Караганда, ПВ №1",
+        "C4:NEW": "г.Караганда, ПВ Караганда UG",
         "C6:NEW": "г.Астана, ПВ Астана ESIL",
         "C2:NEW": "г.Астана, ПВ Астана ALMATINSKY"
     }
@@ -1562,7 +1562,7 @@ async def process_contact_update(contact_info):
         locations = {
             'pv_astana_1': "г.Астана, ПВ Астана ESIL",
             'pv_astana_2': "г.Астана, ПВ Астана ALMATINSKY",
-            'pv_karaganda_1': "г.Караганда, ПВ №1"
+            'pv_karaganda_1': "г.Караганда, ПВ Караганда UG"
         }
         location = locations.get(client_data['pickup_point'])
         # Отправляем уведомление только если поле amount заполнено и не равно нулю
