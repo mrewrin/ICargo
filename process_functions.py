@@ -557,56 +557,56 @@ async def send_notification_if_required(deal_info, chat_id, track_number, pickup
 #             }
 #             pickup_point_mapped = pickup_mapping.get(client_info['pickup_point'], "неизвестно")
 #
-#             # Обновляем текущую сделку как итоговую
-#             operations[f"update_deal_as_final_{deal_id}"] = (
-#                 f"crm.deal.update?ID={deal_id}&fields[TITLE]=Итоговая сделка: {client_info['personal_code']} "
-#                 f"{client_info['name_translit']} {client_info['pickup_point']} {client_info['phone']}&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
-#                 f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
-#                 f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}&fields[UF_CRM_1730185262]={number_of_orders}"
-#                 f"&fields[UF_CRM_1729115312]={track_number}&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
-#             )
-#             # Маппинг для проверки соответствия пункта выдачи стадии
-#             task_mapping = {
-#                 "52": "C4:NEW",
-#                 "48": "C6:NEW",
-#                 "50": "C2:NEW"
-#             }
-#             exp_stage = task_mapping.get(pickup_point_mapped)
-#             # Проверяем соответствие пункта выдачи стадии
-#             if stage_id != exp_stage:
-#                 logging.warning(
-#                     f"Несоответствие текущей стадии {stage_id} и ожидаемой стадии сделки {exp_stage}.")
-#
-#                 # Формируем новый заголовок для сделки
-#                 incorrect_title = f"НЕВЕРНЫЙ ПУНКТ ВЫДАЧИ: {client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
-#
-#                 # Добавляем операцию изменения поля TITLE в сделке
-#                 operations[f"update_deal_title_{deal_id}"] = (
-#                     f"crm.deal.update?ID={deal_id}&fields[TITLE]={incorrect_title}"
-#                 )
-#                 logging.info(f"Обновление TITLE для сделки {deal_id} на '{incorrect_title}' добавлено в operations.")
-#
-#                 # Формируем заголовок и описание задачи
-#                 task_title = f"Некорректный пункт выдачи! Проверьте сделку {deal_id}"
-#                 task_description = (
-#                     f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
-#                     f"Ожидалась стадия: {exp_stage}, текущая стадия: {stage_id}. "
-#                     f"Контакт: +{client_info['phone']}."
-#                 )
-#                 deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
-#
-#                 # Добавляем операцию создания задачи
-#                 operations[f"create_task_{deal_id}"] = (
-#                     f"tasks.task.add?"
-#                     f"fields[TITLE]={task_title}&"
-#                     f"fields[DESCRIPTION]={task_description}&"
-#                     f"fields[RESPONSIBLE_ID]=1&"
-#                     f"fields[PRIORITY]=2&"
-#                     f"fields[UF_CRM_TASK]=D_{deal_id}&"
-#                     f"fields[DEADLINE]={deadline}"
-#                 )
-#                 logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
-#
+            # # Обновляем текущую сделку как итоговую
+            # operations[f"update_deal_as_final_{deal_id}"] = (
+            #     f"crm.deal.update?ID={deal_id}&fields[TITLE]=Итоговая сделка: {client_info['personal_code']} "
+            #     f"{client_info['name_translit']} {client_info['pickup_point']} {client_info['phone']}&fields[CONTACT_ID]={contact_id}&fields[STAGE_ID]={expected_awaiting_pickup_stage}"
+            #     f"&fields[CATEGORY_ID]={category_id}&fields[UF_CRM_1723542922949]={pickup_point_mapped}"
+            #     f"&fields[UF_CRM_1727870320443]={weight}&fields[OPPORTUNITY]={amount}&fields[UF_CRM_1730185262]={number_of_orders}"
+            #     f"&fields[UF_CRM_1729115312]={track_number}&fields[UF_CRM_1729539412]=1&fields[OPENED]=Y"
+            # )
+            # # Маппинг для проверки соответствия пункта выдачи стадии
+            # task_mapping = {
+            #     "52": "C4:NEW",
+            #     "48": "C6:NEW",
+            #     "50": "C2:NEW"
+            # }
+            # exp_stage = task_mapping.get(pickup_point_mapped)
+            # # Проверяем соответствие пункта выдачи стадии
+            # if stage_id != exp_stage:
+            #     logging.warning(
+            #         f"Несоответствие текущей стадии {stage_id} и ожидаемой стадии сделки {exp_stage}.")
+            #
+            #     # Формируем новый заголовок для сделки
+            #     incorrect_title = f"НЕВЕРНЫЙ ПУНКТ ВЫДАЧИ: {client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+            #
+            #     # Добавляем операцию изменения поля TITLE в сделке
+            #     operations[f"update_deal_title_{deal_id}"] = (
+            #         f"crm.deal.update?ID={deal_id}&fields[TITLE]={incorrect_title}"
+            #     )
+            #     logging.info(f"Обновление TITLE для сделки {deal_id} на '{incorrect_title}' добавлено в operations.")
+            #
+            #     # Формируем заголовок и описание задачи
+            #     task_title = f"Некорректный пункт выдачи! Проверьте сделку {deal_id}"
+            #     task_description = (
+            #         f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
+            #         f"Ожидалась стадия: {exp_stage}, текущая стадия: {stage_id}. "
+            #         f"Контакт: +{client_info['phone']}."
+            #     )
+            #     deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+            #
+            #     # Добавляем операцию создания задачи
+            #     operations[f"create_task_{deal_id}"] = (
+            #         f"tasks.task.add?"
+            #         f"fields[TITLE]={task_title}&"
+            #         f"fields[DESCRIPTION]={task_description}&"
+            #         f"fields[RESPONSIBLE_ID]=1&"
+            #         f"fields[PRIORITY]=2&"
+            #         f"fields[UF_CRM_TASK]=D_{deal_id}&"
+            #         f"fields[DEADLINE]={deadline}"
+            #     )
+            #     logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
+
 #             logging.info(f"Обновлена текущая сделка {deal_id} как итоговая.")
 #             title = f"{client_info['personal_code']} {client_info['name_translit']} {client_info['pickup_point']} +{client_info['phone']}"
 #             # Создание копии обрабатываемой сделки
@@ -1107,6 +1107,7 @@ async def _process_existing_pickup(
     track_number: str = deal_info.get('UF_CRM_1723542556619', '')
     chat_id: Optional[str] = track_data.get('chat_id')
     contact_id = deal_info.get('CONTACT_ID')
+    logging.info(f"Первичный contact_id из сделки: {contact_id}")
     logging.info(f"Найдены данные по трек-номеру {track_number}: {track_data}")
 
     try:
@@ -1115,13 +1116,20 @@ async def _process_existing_pickup(
         logging.error(f"Ошибка при получении клиента по chat_id {chat_id}: {e}")
         client_info = None
 
-    if not client_info:
-        # Фоллбэк: если client_info не получен через chat_id, пробуем получить по contact_id
-        logging.info(f"Клиент не найден по chat_id {chat_id}. Попытка получения данных по contact_id {contact_id}.")
+    # Фоллбэк 1: если client_info не найден — пробуем по contact_id
+    if not client_info and contact_id:
+        logging.info(f"Клиент не найден по chat_id. Пробуем по contact_id {contact_id}")
         client_info = get_client_by_contact_id(contact_id)
-        if not client_info:
-            logging.error(f"Клиент с contact_id {contact_id} не найден.")
-            return
+
+    # Фоллбэк 2: если contact_id не был в сделке, но client_info найден через chat_id — восстановим contact_id
+    if client_info and not contact_id:
+        contact_id = client_info.get('contact_id')
+        logging.info(f"contact_id восстановлен из client_info: {contact_id}")
+
+    # Последняя проверка
+    if not client_info:
+        logging.error(f"Клиент не найден ни по chat_id, ни по contact_id. Прерывание обработки.")
+        return
 
     logging.info(f"Получены данные клиента: {client_info}")
     expected_contact_id: int = int(client_info.get('contact_id'))
@@ -1418,6 +1426,29 @@ async def _update_current_deal_as_final(
     }
     pickup_point_mapped: str = pickup_mapping.get(client_info['pickup_point'], "неизвестно")
 
+    # --- Добавляем проверку соответствия пункта выдачи стадии ---
+    current_stage = deal_info.get('STAGE_ID')
+    task_mapping = {
+         "52": "C4:NEW",
+         "48": "C6:NEW",
+         "50": "C2:NEW"
+    }
+    expected_stage = task_mapping.get(pickup_point_mapped)
+    if current_stage != expected_stage:
+         logging.warning(f"Несоответствие текущей стадии {current_stage} и ожидаемой стадии {expected_stage} для пункта выдачи {pickup_point_mapped}.")
+         incorrect_title = f"НЕВЕРНЫЙ ПУНКТ ВЫДАЧИ: {client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+         ops_builder.operations[f"update_deal_title_{deal_id}"] = f"crm.deal.update?ID={deal_id}&fields[TITLE]={incorrect_title}"
+         logging.info(f"Обновление TITLE для сделки {deal_id} на '{incorrect_title}' добавлено в operations.")
+         task_title = f"Некорректный пункт выдачи! Проверьте сделку {deal_id}"
+         task_description = (
+             f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
+             f"Ожидалась стадия: {expected_stage}, текущая стадия: {current_stage}. "
+             f"Контакт: +{client_info['phone']}."
+         )
+         deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+         ops_builder.add_create_task(deal_id, task_title, task_description, deadline)
+         logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
+
     ops_builder.add_update_deal_as_final(
         deal_id=deal_id,
         client_info=client_info,
@@ -1500,14 +1531,17 @@ async def process_deal_add(
             4: 'ПВ Караганда №1'
         }.get(int(category_id))
         client_info = None
-        chat_id = get_chat_id_by_contact_id(precheck['contact_id'])
+        contact_id = precheck.get('contact_id')
+        if contact_id:
+            contact_id = int(contact_id)
+        chat_id = get_chat_id_by_contact_id(contact_id)
         if chat_id:
             client_info = get_client_by_chat_id(chat_id)
-        if not client_info and precheck['contact_id']:
-            logging.info(f"Попытка получения данных клиента по contact_id {precheck['contact_id']}")
-            client_info = get_client_by_contact_id(precheck['contact_id'])
+        if not client_info and contact_id:
+            logging.info(f"Попытка получения данных клиента по contact_id {contact_id}")
+            client_info = get_client_by_contact_id(contact_id)
         if not client_info:
-            logging.error(f"Клиентская информация не найдена для contact_id {precheck['contact_id']}. Пропуск обработки.")
+            logging.error(f"Клиентская информация не найдена для contact_id {contact_id}. Пропуск обработки.")
             return
         final_ops_builder = OperationsBuilder()
         await process_final_deal(deal_info, client_info, pipeline_stage, final_ops_builder)
