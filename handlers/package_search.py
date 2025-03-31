@@ -119,10 +119,10 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
 
         # Проверяем, что last_modified не пустой, и форматируем дату один раз
         if last_modified and last_modified.strip():
-            formatted_last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
-            formatted_last_modified = remove_leading_time(formatted_last_modified)
+            last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
+            last_modified = remove_leading_time(formatted_last_modified)
         else:
-            formatted_last_modified = "Неизвестная дата"
+            last_modified = "Неизвестная дата"
 
         status_code_list = {
             "C8:NEW": "📑 Добавлен в базу",
