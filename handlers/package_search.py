@@ -120,7 +120,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
         # Проверяем, что last_modified не пустой, и форматируем дату один раз
         if last_modified and last_modified.strip():
             last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
-            last_modified = remove_leading_time(formatted_last_modified)
+            last_modified = remove_leading_time(last_modified)
         else:
             last_modified = "Неизвестная дата"
 
