@@ -50,7 +50,7 @@ async def process_track_number(message: Message, state: FSMContext):
         deal_contact = last_deal.get('CONTACT_ID')
         pipeline_stage = last_deal.get('STAGE_ID')
         category_id = int(last_deal.get('CATEGORY_ID'))
-        date_modify = last_deal.get('DATE_MODIFY')  # Получаем дату изменения сделки
+        date_modify = last_deal.get('UF_CRM_1743357179')  # Получаем дату изменения сделки
 
         chat_id = message.chat.id
         user_data = get_client_by_chat_id(chat_id)

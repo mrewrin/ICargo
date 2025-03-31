@@ -34,7 +34,7 @@ stage_mapping = {
 def get_deals_by_track(track_number):
     """
     Получает список сделок по значению пользовательского поля UF_CRM_1723542556619.
-    Возвращает список сделок с полями ID, STAGE_ID, DATE_MODIFY, UF_CRM_1723542556619 и CONTACT_ID.
+    Возвращает список сделок с полями ID, STAGE_ID, UF_CRM_1743357179, UF_CRM_1723542556619 и CONTACT_ID.
     """
     url = webhook_url + 'crm.deal.list'
 
@@ -68,7 +68,7 @@ def get_deals_by_track_ident(track_number):
         'filter': {
             'UF_CRM_1723542556619': track_number  # Ищем по трек-номеру
         },
-        'select': ['ID', 'STAGE_ID', 'DATE_MODIFY', 'UF_CRM_1723542556619', 'CONTACT_ID']  # Выбираем только нужные поля
+        'select': ['ID', 'STAGE_ID', 'UF_CRM_1743357179', 'UF_CRM_1723542556619', 'CONTACT_ID']  # Выбираем только нужные поля
     }
 
     response = requests.post(url, json={'filter': params_deal['filter'], 'select': params_deal['select']})

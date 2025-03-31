@@ -846,7 +846,7 @@ def precheck_deal(deal_info: dict) -> Optional[dict]:
 
     stage_id = deal_info.get('STAGE_ID')
     category_id = deal_info.get('CATEGORY_ID')
-    date_modify = deal_info.get('DATE_MODIFY')
+    date_modify = deal_info.get('UF_CRM_1743357179')
 
     # Формирование набора стадий, соответствующих "awaiting_pickup"
     awaiting_pickup_stages = {v['awaiting_pickup'] for v in stage_mapping.values()}
