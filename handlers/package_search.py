@@ -122,7 +122,16 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
             last_modified = remove_leading_time(last_modified)
         else:
-            last_modified = "Неизвестная дата"
+            fresh_deals = get_deals_by_track(track_number)
+            if fresh_deals:
+                temp_date = fresh_deals[0].get('DATE_MODIFY', '')
+                if temp_date and temp_date.strip():
+                    last_modified = datetime.fromisoformat(temp_date).strftime("%H:%M %d.%m.%Y")
+                    last_modified = remove_leading_time(last_modified)
+                else:
+                    last_modified = "Неизвестная дата"
+            else:
+                last_modified = "Неизвестная дата"
 
         status_code_list = {
             "C8:NEW": "📑 Добавлен в базу",
