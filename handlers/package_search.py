@@ -11,7 +11,7 @@ from bitrix_integration import get_deals_by_track, delete_deal, update_tracked_d
 from keyboards import create_tracking_keyboard, create_management_keyboard, create_menu_button, \
     create_single_track_management_keyboard
 from states import Track
-from handlers.utils import send_and_delete_previous
+from handlers.utils import send_and_delete_previous, remove_leading_time
 
 
 router = Router()
@@ -127,6 +127,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
         deal_status_text = status_code_list.get(deal_status, "🎁 Упакован и ожидает выдачи")
         if last_modified != 'Неизвестная дата':
             last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
+            last_modified = remove_leading_time(last_modified)
         name_track = get_name_track_by_track_number(track_number)
         deal_info = await get_deal_info(last_deal['ID'])
         if deal_info.get('UF_CRM_1729539412') == '1':
@@ -145,6 +146,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
         else:
             if china_shipment_date:
                 formatted_china = datetime.fromisoformat(china_shipment_date).strftime("%H:%M %d.%m.%Y")
+                formatted_china = remove_leading_time(formatted_china)
             else:
                 formatted_china = None
             # last_modified уже отформатирован (если не 'Неизвестная дата')

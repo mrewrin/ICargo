@@ -61,3 +61,9 @@ async def send_and_delete_previous(message, text, reply_markup=None, state=None)
 
     except Exception as e:
         logging.error(f"Ошибка при отправке сообщения: {e}")
+
+
+def remove_leading_time(date_str: str) -> str:
+    if date_str.startswith("00:00 "):
+        return date_str[6:]  # пропускаем первые 6 символов ("00:00 ")
+    return date_str

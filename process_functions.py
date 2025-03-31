@@ -1426,29 +1426,6 @@ async def _update_current_deal_as_final(
     }
     pickup_point_mapped: str = pickup_mapping.get(client_info['pickup_point'], "неизвестно")
 
-    # --- Добавляем проверку соответствия пункта выдачи стадии ---
-    current_stage = deal_info.get('STAGE_ID')
-    task_mapping = {
-         "52": "C4:NEW",
-         "48": "C6:NEW",
-         "50": "C2:NEW"
-    }
-    expected_stage = task_mapping.get(pickup_point_mapped)
-    if current_stage != expected_stage:
-         logging.warning(f"Несоответствие текущей стадии {current_stage} и ожидаемой стадии {expected_stage} для пункта выдачи {pickup_point_mapped}.")
-         incorrect_title = f"НЕВЕРНЫЙ ПУНКТ ВЫДАЧИ: {client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
-         ops_builder.operations[f"update_deal_title_{deal_id}"] = f"crm.deal.update?ID={deal_id}&fields[TITLE]={incorrect_title}"
-         logging.info(f"Обновление TITLE для сделки {deal_id} на '{incorrect_title}' добавлено в operations.")
-         task_title = f"Некорректный пункт выдачи! Проверьте сделку {deal_id}"
-         task_description = (
-             f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
-             f"Ожидалась стадия: {expected_stage}, текущая стадия: {current_stage}. "
-             f"Контакт: +{client_info['phone']}."
-         )
-         deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
-         ops_builder.add_create_task(deal_id, task_title, task_description, deadline)
-         logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
-
     ops_builder.add_update_deal_as_final(
         deal_id=deal_id,
         client_info=client_info,
@@ -1483,6 +1460,29 @@ async def _update_current_deal_as_final(
         number_of_orders=number_of_orders
     )
     logging.info(f"Обновлена и сохранена текущая сделка {deal_id} как итоговая в базу данных.")
+
+    # --- Добавляем проверку соответствия пункта выдачи стадии ---
+    current_stage = deal_info.get('STAGE_ID')
+    task_mapping = {
+         "52": "C4:NEW",
+         "48": "C6:NEW",
+         "50": "C2:NEW"
+    }
+    expected_stage = task_mapping.get(pickup_point_mapped)
+    if current_stage != expected_stage:
+         logging.warning(f"Несоответствие текущей стадии {current_stage} и ожидаемой стадии {expected_stage} для пункта выдачи {pickup_point_mapped}.")
+         incorrect_title = f"НЕВЕРНЫЙ ПУНКТ ВЫДАЧИ: {client_info['personal_code']} {client_info['pickup_point']} {client_info['phone']}"
+         ops_builder.operations[f"update_deal_title_{deal_id}"] = f"crm.deal.update?ID={deal_id}&fields[TITLE]={incorrect_title}"
+         logging.info(f"Обновление TITLE для сделки {deal_id} на '{incorrect_title}' добавлено в operations.")
+         task_title = f"Некорректный пункт выдачи! Проверьте сделку {deal_id}"
+         task_description = (
+             f"Заказ прибыл в некорректный пункт выдачи: {client_info['pickup_point']}. "
+             f"Ожидалась стадия: {expected_stage}, текущая стадия: {current_stage}. "
+             f"Контакт: +{client_info['phone']}."
+         )
+         deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+         ops_builder.add_create_task(deal_id, task_title, task_description, deadline)
+         logging.info(f"Операция создания задачи добавлена для сделки {deal_id}.")
 
 
 async def process_deal_add(
