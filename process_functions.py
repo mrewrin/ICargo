@@ -972,9 +972,13 @@ async def _process_existing_track(
         logging.info(f"Ожидаемый контакт ID: {expected_contact_id}. Найдена старая сделка: {old_deal}")
 
         if old_deal and old_deal['ID'] != deal_info.get('ID'):
-            logging.info(f"Удаление старой сделки ID {old_deal['ID']} для трек-номера {track_number}.")
-            ops_builder.add_detach_old_contact(old_deal['ID'], expected_contact_id)
-            ops_builder.add_delete_deal(old_deal['ID'])
+            # Если старая сделка не является итоговой, удаляем её
+            if old_deal.get('UF_CRM_1729539412') != '1':
+                logging.info(f"Удаление старой сделки ID {old_deal['ID']} для трек-номера {track_number}.")
+                ops_builder.add_detach_old_contact(old_deal['ID'], expected_contact_id)
+                ops_builder.add_delete_deal(old_deal['ID'])
+            else:
+                logging.info(f"Старая сделка ID {old_deal['ID']} является итоговой и не будет удалена.")
 
         title = f"{client_info['personal_code']} {client_info['name_translit']} " \
                 f"{client_info['pickup_point']} +{client_info['phone']}"
@@ -1137,23 +1141,30 @@ async def _process_existing_pickup(
     logging.info(f"Ожидаемый контакт ID: {expected_contact_id}. Найден дубликат: {duplicate_deal}")
 
     if duplicate_deal and duplicate_deal['ID'] != deal_info.get('ID'):
-        old_stage_id = duplicate_deal.get('STAGE_ID')
-        expected_stage_id = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup')
-        if not duplicate_deal.get('CONTACT_ID') or old_stage_id != expected_stage_id:
-            logging.info(
-                f"Удаление дубликата ID {duplicate_deal['ID']} для трек-номера {track_number}. "
-                f"Этап дубликата: {old_stage_id}, ожидаемый этап: {expected_stage_id}."
-            )
-            ops_builder.add_detach_old_contact(duplicate_deal['ID'], expected_contact_id)
-            ops_builder.add_delete_deal(duplicate_deal['ID'])
-            task_id = get_task_id_by_deal_id(duplicate_deal['ID'])
-            if task_id:
-                ops_builder.operations[f"delete_task_{task_id}"] = f"tasks.task.delete?taskId={task_id}"
-                logging.info(f"Операция удаления задачи с ID {task_id} для дубликата {duplicate_deal['ID']} добавлена.")
-                delete_task_from_db(duplicate_deal['ID'])
-                logging.info(f"Запись о задаче для дубликата {duplicate_deal['ID']} удалена.")
+        # Если найденная сделка-дубликат не является итоговой, продолжаем проверку на соответствие этапа
+        if duplicate_deal.get('UF_CRM_1729539412') != '1':
+            old_stage_id = duplicate_deal.get('STAGE_ID')
+            expected_stage_id = stage_mapping.get(pipeline_stage, {}).get('awaiting_pickup')
+            if not duplicate_deal.get('CONTACT_ID') or old_stage_id != expected_stage_id:
+                logging.info(
+                    f"Удаление дубликата ID {duplicate_deal['ID']} для трек-номера {track_number}. "
+                    f"Этап дубликата: {old_stage_id}, ожидаемый этап: {expected_stage_id}."
+                )
+                ops_builder.add_detach_old_contact(duplicate_deal['ID'], expected_contact_id)
+                ops_builder.add_delete_deal(duplicate_deal['ID'])
+                task_id = get_task_id_by_deal_id(duplicate_deal['ID'])
+                if task_id:
+                    ops_builder.operations[f"delete_task_{task_id}"] = f"tasks.task.delete?taskId={task_id}"
+                    logging.info(
+                        f"Операция удаления задачи с ID {task_id} для дубликата {duplicate_deal['ID']} добавлена.")
+                    delete_task_from_db(duplicate_deal['ID'])
+                    logging.info(f"Запись о задаче для дубликата {duplicate_deal['ID']} удалена.")
+                else:
+                    logging.info(f"Для дубликата {duplicate_deal['ID']} не найдена привязанная задача.")
             else:
-                logging.info(f"Для дубликата {duplicate_deal['ID']} не найдена привязанная задача.")
+                logging.info(f"Дубликат {duplicate_deal['ID']} не удовлетворяет условиям для удаления.")
+        else:
+            logging.info(f"Дубликат {duplicate_deal['ID']} является итоговой и не будет удален.")
     else:
         logging.info(f"Дубликаты для трек-номера {track_number} не найдены.")
 
