@@ -160,7 +160,7 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
             else:
                 formatted_china = None
             # last_modified уже отформатирован (если не 'Неизвестная дата')
-            if formatted_china and formatted_china == last_modified:
+            if formatted_china and formatted_china == last_modified and deal_status == "C8:PREPARATION":
                 alert_text = (
                     f"📦 Информация о посылке:\n"
                     f"Название: {name_track}\n"
