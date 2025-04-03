@@ -1525,7 +1525,7 @@ async def process_deal_add(
         precheck['deal_id'],
         precheck['track_number'],
         precheck['stage_id'],
-        precheck['date_modify']
+        precheck['UF_CRM_1743357179']
     )
 
     # 3. Обработка сделки по категориям
