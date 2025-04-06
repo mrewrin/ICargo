@@ -8,6 +8,7 @@ from db_management import get_personal_code_by_chat_id, get_track_data_by_track_
     update_tracked_deal, get_task_id_by_deal_id, delete_task_from_db, get_original_date_by_track, save_deal_history, \
     update_name_track_by_track_number
 from bitrix_integration import update_contact_fields_in_bitrix
+from functions import trim_time_from_iso
 
 
 # Определение маппинга стадий для каждой воронки
@@ -1521,11 +1522,13 @@ async def process_deal_add(
         return
 
     # 2. Обновление истории сделки
+    raw_date = deal_info.get("UF_CRM_1743357179") or deal_info.get("DATE_MODIFY")
+    raw_date = trim_time_from_iso(raw_date)
     update_deal_history(
         precheck['deal_id'],
         precheck['track_number'],
         precheck['stage_id'],
-        precheck['date_modify']
+        raw_date
     )
 
     # 3. Обработка сделки по категориям

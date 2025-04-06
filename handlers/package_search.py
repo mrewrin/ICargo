@@ -12,6 +12,7 @@ from keyboards import create_tracking_keyboard, create_management_keyboard, crea
     create_single_track_management_keyboard
 from states import Track
 from handlers.utils import send_and_delete_previous, remove_leading_time
+from functions import format_date
 
 
 router = Router()
@@ -106,91 +107,79 @@ async def handle_track_status(callback: CallbackQuery, state: FSMContext):
     track_number = callback.data.split("_")[1]
     deals = get_deals_by_track(track_number)
 
-    if deals:
-        last_deal = deals[0]
-        deal_status = last_deal.get('STAGE_ID', 'Неизвестный статус')
-        # Получаем оригинальную дату изменения из локальной таблицы
-        deal_history = get_original_date_by_track(track_number)
-        if deal_history:
-            last_modified, stage_id, china_shipment_date = deal_history
-        else:
-            last_modified = last_deal.get('DATE_MODIFY', 'Неизвестная дата')
-            china_shipment_date = None  # Добавляем инициализацию
+    if not deals:
+        await callback.answer("📦 Сделки с этим трек-номером не найдены.", show_alert=True)
+        return
 
-        # Проверяем, что last_modified не пустой, и форматируем дату один раз
-        if last_modified and last_modified.strip():
-            last_modified = datetime.fromisoformat(last_modified).strftime("%H:%M %d.%m.%Y")
-            last_modified = remove_leading_time(last_modified)
-        else:
-            temp_date = last_deal.get('DATE_MODIFY', '')
-            if temp_date and temp_date.strip():
-                last_modified = datetime.fromisoformat(temp_date).strftime("%H:%M %d.%m.%Y")
-                last_modified = remove_leading_time(last_modified)
-            else:
-                last_modified = "Неизвестная дата"
+    last_deal = deals[0]
+    deal_status = last_deal.get('STAGE_ID', 'Неизвестный статус')
 
-        status_code_list = {
-            "C8:NEW": "📑 Добавлен в базу",
-            "C8:PREPARATION": "🇨🇳 Отгружен со склада Китая",
-            "C8:PREPAYMENT_INVOICE": "🇰🇿 Прибыл в Алмату",
-            "C4:NEW": "🎁 Прибыл в ПВ Караганда UG",
-            "C6:NEW": "🎁 Прибыл в ПВ Астана ESIL",
-            "C2:NEW": "🎁 Прибыл в ПВ Астана ALMATINSKIY"
-        }
-        deal_status_text = status_code_list.get(deal_status, "🎁 Упакован и ожидает выдачи")
-        name_track = get_name_track_by_track_number(track_number)
-        deal_info = await get_deal_info(last_deal['ID'])
-        if deal_info.get('UF_CRM_1729539412') == '1':
-            track_numbers = deal_info.get('UF_CRM_1729115312')
-            ready_track_numbers = [item.strip() for item in track_numbers.split(",") if item.strip()]
+    # Получаем дату из истории сделки, если она есть, иначе из последней сделки
+    deal_history = get_original_date_by_track(track_number)
+    if deal_history:
+        last_modified_raw, saved_stage_id, china_shipment_date_raw = deal_history
+    else:
+        last_modified_raw = last_deal.get("DATE_MODIFY", "")
+        china_shipment_date_raw = None
 
-            ready_parcels_text = "\n".join(ready_track_numbers)  # Форматируем трек-номера в столбик
+    # Форматируем даты: оставляем только дату без времени
+    last_modified = format_date(last_modified_raw)
+    formatted_china = format_date(china_shipment_date_raw) if china_shipment_date_raw else None
 
+    status_code_list = {
+        "C8:NEW": "📑 Добавлен в базу",
+        "C8:PREPARATION": "🇨🇳 Отгружен со склада Китая",
+        "C8:PREPAYMENT_INVOICE": "🇰🇿 Прибыл в Алмату",
+        "C4:NEW": "🎁 Прибыл в ПВ Караганда UG",
+        "C6:NEW": "🎁 Прибыл в ПВ Астана ESIL",
+        "C2:NEW": "🎁 Прибыл в ПВ Астана ALMATINSKIY"
+    }
+    deal_status_text = status_code_list.get(deal_status, "🎁 Упакован и ожидает выдачи")
+    name_track = get_name_track_by_track_number(track_number)
+    deal_info = await get_deal_info(last_deal['ID'])
+
+    if deal_info.get('UF_CRM_1729539412') == '1':
+        # Если сделка итоговая, выводим только список готовых трек-номеров
+        track_numbers = deal_info.get('UF_CRM_1729115312')
+        ready_track_numbers = [item.strip() for item in track_numbers.split(",") if item.strip()]
+        ready_parcels_text = "\n".join(ready_track_numbers)
+        alert_text = (
+            f"📦 Информация о посылке:\n"
+            f"Готовые к выдаче посылки:\n"
+            f"{ready_parcels_text}\n"
+            f"{deal_status_text}\n"
+            f"{last_modified}"
+        )
+    else:
+        # Для остальных сделок: если статус C8:PREPARATION и china_shipment_date существует и равна last_modified,
+        # выводим краткий вариант
+        if deal_status == "C8:PREPARATION" and formatted_china and formatted_china == last_modified:
             alert_text = (
                 f"📦 Информация о посылке:\n"
-                f"Готовые к выдаче посылки:\n"
-                f"{ready_parcels_text}\n"  # Выводим только трек-номера
+                f"Название: {name_track}\n"
+                f"Трек номер: {track_number}\n"
+                f"🇨🇳 Отгружен со склада Китая: {formatted_china}\n"
+            )
+        # Если china_shipment_date есть, но отличается от last_modified – выводим полный вариант
+        elif formatted_china:
+            alert_text = (
+                f"📦 Информация о посылке:\n"
+                f"Название: {name_track}\n"
+                f"Трек номер: {track_number}\n"
+                f"🇨🇳 Отгружен со склада Китая: {formatted_china}\n"
                 f"{deal_status_text}\n"
                 f"{last_modified}"
             )
         else:
-            if china_shipment_date:
-                formatted_china = datetime.fromisoformat(china_shipment_date).strftime("%H:%M %d.%m.%Y")
-                formatted_china = remove_leading_time(formatted_china)
-            else:
-                formatted_china = None
-            # last_modified уже отформатирован (если не 'Неизвестная дата')
-            if formatted_china and formatted_china == last_modified and deal_status == "C8:PREPARATION":
-                alert_text = (
-                    f"📦 Информация о посылке:\n"
-                    f"Название: {name_track}\n"
-                    f"Трек номер: {track_number}\n"
-                    f"🇨🇳 Отгружен со склада Китая: {formatted_china}\n"
-                )
-            elif formatted_china:
-                alert_text = (
-                    f"📦 Информация о посылке:\n"
-                    f"Название: {name_track}\n"
-                    f"Трек номер: {track_number}\n"
-                    f"🇨🇳 Отгружен со склада Китая: "
-                    f"{formatted_china}\n"
-                    f"{deal_status_text}\n"
-                    f"{last_modified}"
-                )
-            else:
-                alert_text = (
-                    f"📦 Информация о посылке:\n"
-                    f"Название: {name_track}\n"
-                    f"Трек номер: {track_number}\n"
-                    f"{deal_status_text}\n"
-                    f"{last_modified}"
-                )
+            alert_text = (
+                f"📦 Информация о посылке:\n"
+                f"Название: {name_track}\n"
+                f"Трек номер: {track_number}\n"
+                f"{deal_status_text}\n"
+                f"{last_modified}"
+            )
 
-        # # Кнопка для управления выбранным треком
-        # keyboard = create_tracking_keyboard([(track_number, name_track)])
-        await callback.answer(alert_text, show_alert=True)
-    else:
-        await callback.answer("📦 Сделки с этим трек-номером не найдены.", show_alert=True)
+    await callback.answer(alert_text, show_alert=True)
 
 
 @router.callback_query(F.data.startswith("manage_single_track_"))

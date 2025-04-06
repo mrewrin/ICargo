@@ -6,6 +6,7 @@ from bitrix_integration import create_deal, get_deals_by_track, update_deal_cont
 from db_management import get_client_by_chat_id, save_track_number, save_deal_to_db, get_track_from_db, save_deal_history
 from keyboards import create_menu_button, create_track_added_keyboard
 from states import Track, Menu
+from functions import trim_time_from_iso
 from handlers.utils import send_and_delete_previous
 
 
@@ -50,8 +51,8 @@ async def process_track_number(message: Message, state: FSMContext):
         deal_contact = last_deal.get('CONTACT_ID')
         pipeline_stage = last_deal.get('STAGE_ID')
         category_id = int(last_deal.get('CATEGORY_ID'))
-        date_modify = last_deal.get('UF_CRM_1743357179')  # Получаем дату изменения сделки
-
+        raw_date = last_deal.get("UF_CRM_1743357179") or last_deal.get("DATE_MODIFY")
+        date_modify = trim_time_from_iso(raw_date)
         chat_id = message.chat.id
         user_data = get_client_by_chat_id(chat_id)
         user_contact_id = str(user_data.get('contact_id'))

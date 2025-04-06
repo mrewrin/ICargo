@@ -136,3 +136,15 @@ def export_database_to_excel():
 
     conn.close()
     return output_file
+
+
+def trim_time_from_iso(iso_str):
+    return datetime.fromisoformat(iso_str).date().isoformat() if iso_str else None
+
+
+def format_date(iso_str: str) -> str:
+    try:
+        # Возвращаем дату в формате dd.mm.yyyy
+        return datetime.fromisoformat(iso_str).strftime("%d.%m.%Y")
+    except Exception:
+        return "Неизвестная дата"
